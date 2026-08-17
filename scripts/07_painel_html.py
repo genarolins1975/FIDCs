@@ -288,6 +288,16 @@ td.num {{ text-align:right; font-variant-numeric:tabular-nums }}
 #tip {{ position:fixed; display:none; background:var(--tipbg); color:var(--tipink); font-size:12.5px;
   padding:6px 10px; border-radius:5px; pointer-events:none; max-width:320px; z-index:10;
   font-variant-numeric:tabular-nums }}
+details.explain {{ margin-top:12px; border:1px solid var(--line); border-radius:6px;
+  background:var(--surface); padding:0 16px }}
+details.explain summary {{ cursor:pointer; padding:11px 0; font-size:13.5px; color:var(--ink2);
+  font-weight:600; list-style-position:inside }}
+details.explain[open] summary {{ border-bottom:1px solid var(--grid) }}
+details.explain .body {{ padding:12px 2px 16px; font-size:13.5px; color:var(--ink2); max-width:88ch }}
+details.explain .body p {{ margin:0 0 10px }}
+details.explain .body strong {{ color:var(--ink) }}
+details.explain .body ul {{ margin:0 0 10px; padding-left:20px }}
+details.explain .body li {{ margin-bottom:6px }}
 footer {{ margin-top:48px; color:var(--muted); font-size:12.5px; max-width:80ch }}
 a {{ color:var(--s2) }}
 @media (prefers-reduced-motion: no-preference) {{ .hfill {{ transition:width .5s ease }} }}
@@ -392,6 +402,33 @@ a {{ color:var(--s2) }}
       <div class="tvalue">R$ {fmt(u6.VL_PL.sum()/1e9,1)} bi</div>
       <div class="tsrc">{u6.CNPJ.nunique()} CNPJs (busca nominal) · C031</div></div>
   </div>
+  <details class="explain"><summary>Como ler estes três números</summary><div class="body">
+    <p>Juntos, os cartões respondem à pergunta central de um supervisor: <strong>se um FIDC
+    quebrar, quem sente — e por qual canal?</strong></p>
+    <p><strong>R$ {fmt(detres.vl_detido_por_nao_fidc/1e9,0)} bi em fundos não-FIDC</strong> medem
+    a distância que o risco viaja. São fundos DI, renda fixa e multimercados — produtos de
+    varejo — que carregam cotas de FIDC na carteira. Um problema de lastro chega ao
+    correntista comum em dois passos (FIDC → fundo → cotista), o mesmo mecanismo de
+    empacotamento que amplificou a crise de 2008. Em 2013 esse canal era irrelevante; hoje
+    conecta a securitização à poupança popular.</p>
+    <p><strong>R$ {fmt(detres.vl_posicoes_emissor_ligado/1e9,0)} bi como "emissor ligado"
+    ({fmt(detres.vl_posicoes_emissor_ligado/detres.vl_detido_por_nao_fidc*100,0)}%)</strong> medem
+    quanto dessa detenção circula dentro do próprio grupo que estrutura o FIDC — o campo
+    EMISSOR_LIGADO é declarado à CVM pelo próprio administrador. Quando quem compra a cota
+    é o grupo que a criou, desaparece a verificação independente de lastro e preço, e é o
+    mesmo grupo que marca o valor da cota que precisa que ela não caia. Não é ilegal — é
+    assim que tesourarias de conglomerado operam — mas é o terreno comum a praticamente
+    todos os casos de fraude documentados (Silverado, Cruzeiro do Sul, Reag): circuito
+    fechado entre cedente, gestor e cotista.</p>
+    <p><strong>R$ {fmt(u6.VL_PL.sum()/1e9,1)} bi do ecossistema ex-Reag</strong> são o risco
+    materializado: veículos ligados a um grupo cuja administradora (CBSF, ex-Reag Trust) era
+    a 7ª maior do mercado quando foi liquidada pelo BCB. A lição é dupla: contágio por
+    prestador comum atinge também os fundos idôneos (no caso Master, 52-58 FIDCs ficaram
+    sem administrador de uma vez), e os sinais eram visíveis nos dados públicos meses antes
+    das manchetes — a queda de 33% no PL administrado aparecia no ranking. Ressalva
+    obrigatória: patrimônio de fundo é segregado do prestador; estar nesta lista não imputa
+    ilicitude a nenhum veículo.</p>
+  </div></details>
   <div class="cols" style="margin-top:16px">
     <div class="card"><h3 style="margin:0 0 10px;font-size:15px">Maiores gestores detentores de cotas de FIDC (CDA, R$ bi)</h3>{detentores_html}</div>
     <div class="card"><h3 style="margin:0 0 6px;font-size:15px">CBSF DTVM (ex-Reag Trust) — PL administrado</h3>
@@ -400,6 +437,39 @@ a {{ color:var(--s2) }}
   </div>
   <div class="cols" style="margin-top:16px">
     <div class="card"><h3 style="margin:0 0 10px;font-size:15px">Triagem de red flags (nº de veículos por padrão)</h3>{rf_html}
+      <details class="explain" style="margin-top:12px"><summary>O que cada red flag significa</summary><div class="body">
+      <ul>
+        <li><strong>RF1 — inadimplência ~zero com cedente concentrado.</strong> Carteira grande,
+        um cedente dominante e atraso praticamente nulo. Parece virtude, mas é a assinatura
+        das fraudes de lastro: crédito inventado não atrasa — no Cruzeiro do Sul, os 320 mil
+        consignados fictícios eram "adimplentes perfeitos" até a intervenção. Adimplência
+        realista tem ruído; perfeição prolongada merece inspeção do lastro.</li>
+        <li><strong>RF2 — recompras e substituições acima de 15% da carteira em 12 meses.</strong>
+        O cedente recomprar ou trocar créditos antes do vencimento pode ser gestão comercial
+        legítima — ou rolagem: o crédito prestes a vencer some da carteira antes de virar
+        atraso, e a inadimplência publicada fica artificialmente baixa. Volume alto e
+        recorrente transfere a dúvida para o administrador demonstrar a substância.</li>
+        <li><strong>RF3 — um ou dois cotistas, interesse único e subordinação abaixo de 5%.</strong>
+        Estrutura fechada: quem cede, quem gere e quem investe são o mesmo interesse
+        econômico, e quase não há capital subordinado absorvendo primeira perda. Sem
+        investidor externo, ninguém independente valida preço nem lastro. Captura FIDCs
+        cativos de tesouraria legítimos — por isso é sinal de atenção, não veredito — mas
+        foi o desenho usado em todos os grandes casos.</li>
+        <li><strong>RF4 — queda de patrimônio superior a 50% em um mês.</strong> Colapsos não
+        avisam: a cota fica estável por anos (marcação controlada) e reprecifica de uma vez,
+        como nos FIDCs Maximum da Silverado. Quedas abruptas também identificam resgates em
+        massa de cotista único — em ambos os casos, o evento merece autópsia.</li>
+        <li><strong>RF5 — crescimento acima de 150% em 12 meses com cedente ≥80%.</strong>
+        Expansão explosiva alimentada por um único originador, sem diversificação. É o perfil
+        de esquemas em carrossel e pirâmides de recebíveis (a acusação no caso Reag), em que
+        o crescimento da captação é a própria fonte de pagamento das cotas antigas. Crescimento
+        rápido exige due diligence proporcional do lastro novo.</li>
+      </ul>
+      <p>Método: cada padrão foi extraído dos casos documentados ao lado e aplicado aos 4.327
+      veículos do corte. Os limiares são deliberadamente conservadores; falsos positivos são
+      esperados e aceitáveis — o objetivo é priorizar inspeção, não acusar. A interseção de
+      dois ou mais padrões no mesmo veículo é o critério natural de escalonamento.</p>
+      </div></details>
       <p class="note" style="margin:10px 0 0">Tipologia derivada dos casos documentados; listas nominais em <code>red_flags_regulatorios.csv</code>.</p></div>
     <div class="card" style="overflow-x:auto"><h3 style="margin:0 0 10px;font-size:15px">Casos documentados</h3>
       <table><thead><tr><th>Caso</th><th>Anos</th><th>Mecanismo</th><th>Desfecho</th></tr></thead>
