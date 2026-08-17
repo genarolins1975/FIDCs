@@ -30,7 +30,7 @@ fundo OU classe no novo). Regras de dedupe aplicadas por competência:
 
 1. CNPJ presente como `Fundo` e `Classe` na mesma competência → prevalece `Classe`;
 2. linha `Fundo` cujo fundo tem classes com CNPJ próprio informando na mesma
-   competência → excluída (sobreposição medida: R$ 0,13 bi em 06/2026, 3 casos).
+   competência → excluída (sobreposição efetivamente excluída em 06/2026: 1 caso, R$ 10,5 mi — verificado pelo agente espelho).
 
 Como ~95% dos FIDCs opera com classe única (CNPJ da classe = CNPJ do fundo),
 a série número de veículos é aproximadamente comparável ao longo da transição;
@@ -57,6 +57,9 @@ a contagem de "classes" propriamente ditas só existe no regime novo.
   descartes contados em `captacao_liquida_anual.csv`). Medida **bruta de
   dupla contagem intramercado** (subscrições de FIC-FIDC em FIDCs) e sujeita a
   integralizações em ativos; usada como ordem de grandeza.
+- **Cobertura do ranking de cedentes**: os percentuais top-9 declarados cobrem
+  **29,4% do estoque de DCs** no corte (`cedentes_cobertura.csv`); 60% dos
+  veículos não informam cedente válido — o ranking é um **piso**, não um censo.
 - **Exposição estimada por cedente** = Σ sobre veículos de
   (`PR_CEDENTE`/100 × valor do bucket de DC correspondente), tab I, apenas
   top-9 cedentes por veículo, percentuais entre 0 e 100. É **estimativa
@@ -83,6 +86,7 @@ a contagem de "classes" propriamente ditas só existe no regime novo.
 | FIDC investindo em FIDC | coluna separada `cotas_fidc_detidas`; PL líquido de circularidade |
 | co-gestão / multirregistro | registro ativo mais recente; cobertura do ranking = 100,0% do PL |
 | reapresentações | usa-se o arquivo vigente no portal (última versão publicada) |
+| linhas duplicadas nos zips CVM | dedup por (CNPJ, competência) nas tabelas de 1 linha/veículo; contagens em `dedup_log.csv` |
 | captação intramercado | declarada como limitação da métrica X_4 |
 
 ## 6. Limitações principais

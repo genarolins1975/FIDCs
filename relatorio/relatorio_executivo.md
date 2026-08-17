@@ -24,7 +24,7 @@
 2. **Crescimento.** O PL cresceu **11,8× em termos nominais desde dez/2013**
    (R$ 84,5 bi → R$ 999,5 bi) e **5,9× em termos reais** (IPCA), um CAGR real de
    **15,3% a.a.** — o segmento mais dinâmico da indústria de fundos. Nos 12 meses
-   até o corte, +16,2% **[C]**.
+   até o corte, +16,5% **[C]**.
 3. **Democratização recente.** O número de cotistas saltou de **9,4 mil (2013)
    para 461,5 mil (jun/2026)** — quase 50× — com aceleração após a RCVM 175
    permitir acesso do investidor de varejo a FIDCs **[C]**.
@@ -98,7 +98,7 @@
   reporte por fundo para por classe ocorreu de forma escalonada entre dez/2024
   e mar/2026 e é a única quebra de série relevante; os controles de dupla
   contagem fundo×classe estão descritos na metodologia (sobreposição residual
-  medida: R$ 0,13 bi, 3 casos, 06/2026).
+  efetivamente excluída em 06/2026: 1 caso, R$ 10,5 mi — verificação do espelho).
 - A **Resolução CVM 240 (06/03/2026)** alterou o Anexo II para facilitar a
   cessão por empresas em recuperação judicial (créditos performados deixam de
   ser automaticamente "não padronizados"; coobrigação de sociedade em RJ
@@ -109,14 +109,14 @@
 
 | Dez | Veículos | PL (R$ bi) | PL real jun/26 (R$ bi) | Cotistas (mil) |
 |---|---|---|---|---|
-| 2013 | 431 | 84,5 | 169,5 | 9,4 |
-| 2015 | 527 | 84,7 | 148,8 | 12,5 |
-| 2017 | 751 | 115,3 | 185,8 | 16,1 |
-| 2019 | 1.042 | 237,4 | 352,0 | 25,8 |
-| 2021 | 1.547 | 308,9 | 398,4 | 31,6 |
-| 2023 | 2.405 | 486,3 | 555,6 | 62,1 |
-| 2024 | 3.140 | 731,8 | 796,8 | 148,6 |
-| 2025 | 4.027 | 922,4 | 947,5 | 387,7 |
+| 2013 | 430 | 84,5 | 169,5 | 9,4 |
+| 2015 | 527 | 84,7 | 144,2 | 12,5 |
+| 2017 | 750 | 115,2 | 179,4 | 16,0 |
+| 2019 | 1.042 | 237,4 | 341,5 | 25,8 |
+| 2021 | 1.547 | 308,9 | 386,3 | 31,6 |
+| 2023 | 2.404 | 485,4 | 548,4 | 61,7 |
+| 2024 | 3.140 | 731,8 | 788,7 | 148,6 |
+| 2025 | 4.013 | 919,3 | 950,2 | 387,4 |
 | **jun/2026** | **4.327** | **999,5** | **999,5** | **461,5** |
 
 Fonte: CVM, informes mensais (tab. IV, X.1), painel canônico deduplicado; IPCA/BCB. **[C]**
@@ -200,8 +200,11 @@ como veículo de funding e não de transferência de risco. **[C]**
 ## 8. Cedentes e originadores identificáveis
 
 Metodologia: CNPJs dos 9 maiores cedentes por veículo × % declarado × valor do
-bucket (tab. I) — **estimativa-piso**, cobre a cabeça da distribuição; nomes
-resolvidos na base pública do CNPJ. Ranking completo: `cedentes_ranking_nomes.csv`.
+bucket (tab. I) — **estimativa-piso**: os percentuais declarados cobrem **29,4%
+do estoque de DCs** do corte (60% dos veículos não informam cedente válido), de
+modo que o ranking identifica a cabeça da distribuição, não o censo. Nomes
+resolvidos na base pública do CNPJ. Ranking completo: `cedentes_ranking_nomes.csv`,
+cobertura em `cedentes_cobertura.csv`.
 
 | # | Cedente (grupo) | Exposição estimada (R$ bi) | Veículos | Setor |
 |---|---|---|---|---|

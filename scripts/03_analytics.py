@@ -179,10 +179,14 @@ def main() -> int:
     # ---------- Ranking de gestores (registro CVM, corte) ----------
     gest = con.execute(f"""
     WITH mapa AS (
+      -- prioridade classe->fundo; linhas fundo->fundo só para CNPJs que não
+      -- são classe de outro fundo (evita dupla atribuição de PL a 2 gestores)
       SELECT cnpj_classe cnpj, cnpj_fundo FROM mapa_classe_fundo
       UNION ALL
       SELECT DISTINCT regexp_replace(CNPJ_Fundo,'\\D','','g'),
-             regexp_replace(CNPJ_Fundo,'\\D','','g') FROM registro_fundo),
+             regexp_replace(CNPJ_Fundo,'\\D','','g') FROM registro_fundo rf
+      WHERE regexp_replace(rf.CNPJ_Fundo,'\\D','','g') NOT IN
+            (SELECT cnpj_classe FROM mapa_classe_fundo)),
     gestor_fundo AS (
       -- fundos com mais de um registro (ex.: gestor substituído): prevalece o
       -- registro ativo mais recente, evitando dupla atribuição do PL
@@ -372,7 +376,7 @@ def main() -> int:
       JOIN painel_saneado p ON p.CNPJ=c.CNPJ AND p.DT_COMPTC=c.DT_COMPTC
       JOIN ativo a ON a.CNPJ=c.CNPJ AND a.DT_COMPTC=c.DT_COMPTC
       WHERE c.DT_COMPTC='{CORTE}' AND length(regexp_replace(c.DOC_CEDENTE,'\\D','','g'))>=11
-        AND c.PR_CEDENTE BETWEEN 0 AND 100)  -- percentuais >100 são erro de preenchimento
+        AND c.PR_CEDENTE > 0 AND c.PR_CEDENTE <= 100)  -- PR=0 não conta; >100 é erro de preenchimento
     SELECT CASE WHEN length(regexp_replace(DOC_CEDENTE,'\\D','','g'))>=12
                 THEN lpad(regexp_replace(DOC_CEDENTE,'\\D','','g'),14,'0')
                 ELSE lpad(regexp_replace(DOC_CEDENTE,'\\D','','g'),11,'0') END doc_cedente,
@@ -382,6 +386,27 @@ def main() -> int:
            SUM(PR_CEDENTE/100.0 * vl_bucket) FILTER (BUCKET='sem_risco') exp_sem_risco
     FROM base GROUP BY 1 ORDER BY exposicao_estimada DESC NULLS LAST""").df()
     ced.to_csv(f"{OUT}/cedentes_ranking_estimado.csv", index=False)
+
+    # Cobertura do ranking de cedentes: quanto do DC do corte tem cedente
+    # identificado no top-9 (ressalva R1 do agente espelho)
+    cob = con.execute(f"""
+    WITH pr AS (
+      SELECT c.CNPJ, c.BUCKET, SUM(c.PR_CEDENTE)/100.0 pr_tot
+      FROM cedentes c JOIN painel_saneado p ON p.CNPJ=c.CNPJ AND p.DT_COMPTC=c.DT_COMPTC
+      WHERE c.DT_COMPTC='{CORTE}' AND c.PR_CEDENTE > 0 AND c.PR_CEDENTE <= 100
+      GROUP BY 1,2),
+    base AS (
+      SELECT a.CNPJ, a.TAB_I2A_VL_DIRCRED_RISCO dc_a, a.TAB_I2B_VL_DIRCRED_SEM_RISCO dc_b
+      FROM ativo a JOIN painel_saneado p ON p.CNPJ=a.CNPJ AND p.DT_COMPTC=a.DT_COMPTC
+      WHERE a.DT_COMPTC='{CORTE}')
+    SELECT
+      SUM(coalesce(pa.pr_tot,0)*coalesce(b.dc_a,0) + coalesce(pb.pr_tot,0)*coalesce(b.dc_b,0)) dc_coberto,
+      SUM(coalesce(b.dc_a,0)+coalesce(b.dc_b,0)) dc_total
+    FROM base b
+    LEFT JOIN pr pa ON pa.CNPJ=b.CNPJ AND pa.BUCKET='com_risco'
+    LEFT JOIN pr pb ON pb.CNPJ=b.CNPJ AND pb.BUCKET='sem_risco'""").df()
+    cob["cobertura_top9"] = cob.dc_coberto / cob.dc_total
+    cob.to_csv(f"{OUT}/cedentes_cobertura.csv", index=False)
 
     # Recorrência de cedentes (nº de meses em que aparecem, desde 2013)
     ced_rec = con.execute("""

@@ -1,7 +1,7 @@
 teste,resultado,status,detalhe
 T1 reconciliação PL agregado (DB x CSV publicado),dif 0.000000%,PASS,PL=999.5 bi
 T2 soma por administrador x PL total,dif 0.0000%,PASS,veículos sem CNPJ_ADMIN no informe ficam fora do ranking
-T2b soma por gestor x PL total,dif 0.0029%,PASS,
+T2b soma por gestor x PL total,dif 0.0000%,PASS,
 T3 CNPJs duplicados por competência (painel),0,PASS,
 T4 veículos com registro 'Cancelado' informando no corte,36,WARN,cancelamentos posteriores à competência são esperados em pequeno número
 T5 veículos com PL negativo no corte,39,WARN,listados em alertas.csv

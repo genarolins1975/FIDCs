@@ -22,6 +22,18 @@ import re
 import sys
 import zipfile
 
+DEDUP_LOG = []
+
+
+def dedup_veiculo(df, tabela):
+    """Tabelas com uma linha por veículo/competência: remove duplicatas de
+    (CNPJ, DT_COMPTC) — reapresentações repetidas nos zips da CVM — mantendo a
+    última ocorrência, e registra a contagem para o log de auditoria."""
+    n0 = len(df)
+    df = df.drop_duplicates(subset=["CNPJ", "DT_COMPTC"], keep="last")
+    DEDUP_LOG.append({"tabela": tabela, "linhas": n0, "duplicatas_removidas": n0 - len(df)})
+    return df
+
 import duckdb
 import pandas as pd
 
@@ -94,7 +106,7 @@ def build_pl() -> pd.DataFrame:
                           "DT_COMPTC", "TAB_IV_A_VL_PL"]])
     out = pd.concat(frames, ignore_index=True)
     out = out.rename(columns={"TAB_IV_A_VL_PL": "VL_PL"})
-    return out
+    return out  # dedup de PL é feito no painel canônico (regras i-ii)
 
 
 CED_RE = re.compile(r"TAB_I2[AB]1?2?_CPF_CNPJ_CEDENTE_(\d)")
@@ -144,18 +156,26 @@ def build_ativo_and_cedentes():
             ced = ced[ced["DOC_CEDENTE"].notna() & (ced["DOC_CEDENTE"].str.strip() != "")]
             ced["PR_CEDENTE"] = pd.to_numeric(ced["PR_CEDENTE"], errors="coerce")
             ced_frames.append(ced)
-    return (pd.concat(ativo_frames, ignore_index=True),
-            pd.concat(ced_frames, ignore_index=True))
+    ativo = dedup_veiculo(pd.concat(ativo_frames, ignore_index=True), "ativo")
+    ced = pd.concat(ced_frames, ignore_index=True)
+    n0 = len(ced)
+    ced = ced.drop_duplicates(subset=["CNPJ", "DT_COMPTC", "BUCKET", "POSICAO"], keep="last")
+    DEDUP_LOG.append({"tabela": "cedentes", "linhas": n0, "duplicatas_removidas": n0 - len(ced)})
+    return ativo, ced
 
 
-def build_simple(tab: str, num_prefix: str) -> pd.DataFrame:
-    """Concatena uma tabela numérica do informe preservando todas as colunas TAB_*."""
+def build_simple(tab: str, num_prefix: str, str_cols=()) -> pd.DataFrame:
+    """Concatena uma tabela numérica do informe preservando todas as colunas TAB_*.
+
+    str_cols: colunas textuais (ex.: TAB_X_CLASSE_SERIE) mantidas sem coerção
+    numérica — necessárias como chave em tabelas com várias linhas por veículo.
+    """
     frames = []
     for f in files_for(tab):
         df = read_csv(f)
         df = norm_key(df)
         tabs = [c for c in df.columns if c.startswith(num_prefix)]
-        df = to_num(df, tabs)
+        df = to_num(df, [c for c in tabs if c not in str_cols])
         frames.append(df[["TP_FUNDO_CLASSE", "CNPJ", "DT_COMPTC"] + tabs])
     return pd.concat(frames, ignore_index=True)
 
@@ -169,36 +189,42 @@ def main() -> int:
     con = duckdb.connect(DB)
 
     print("tab IV (PL) ...", flush=True)
-    pl = build_pl()
-    con.execute("CREATE OR REPLACE TABLE pl AS SELECT * FROM pl")
+    pl_df = build_pl()
+    con.register("pl_df", pl_df)
+    con.execute("CREATE OR REPLACE TABLE pl AS SELECT * FROM pl_df")
 
     print("tab I (ativo, admin, cedentes) ...", flush=True)
-    ativo, cedentes = build_ativo_and_cedentes()
-    con.execute("CREATE OR REPLACE TABLE ativo AS SELECT * FROM ativo")
-    con.execute("CREATE OR REPLACE TABLE cedentes AS SELECT * FROM cedentes")
+    ativo_df, cedentes_df = build_ativo_and_cedentes()
+    con.register("ativo_df", ativo_df)
+    con.register("cedentes_df", cedentes_df)
+    con.execute("CREATE OR REPLACE TABLE ativo AS SELECT * FROM ativo_df")
+    con.execute("CREATE OR REPLACE TABLE cedentes AS SELECT * FROM cedentes_df")
 
     print("tab II (carteira por segmento) ...", flush=True)
-    seg = build_simple("II", "TAB_II")
+    seg = dedup_veiculo(build_simple("II", "TAB_II"), "carteira_segmento")
     con.execute("CREATE OR REPLACE TABLE carteira_segmento AS SELECT * FROM seg")
 
     print("tab V/VI (prazos e inadimplência) ...", flush=True)
-    v = build_simple("V", "TAB_V_")
+    v = dedup_veiculo(build_simple("V", "TAB_V_"), "dc_risco_prazos")
     con.execute("CREATE OR REPLACE TABLE dc_risco_prazos AS SELECT * FROM v")
-    vi = build_simple("VI", "TAB_VI_")
+    vi = dedup_veiculo(build_simple("VI", "TAB_VI_"), "dc_semrisco_prazos")
     con.execute("CREATE OR REPLACE TABLE dc_semrisco_prazos AS SELECT * FROM vi")
 
     print("tab VII (aquisições, alienações, recompras, substituições) ...", flush=True)
-    vii = build_simple("VII", "TAB_VII")
+    vii = dedup_veiculo(build_simple("VII", "TAB_VII"), "negocios")
     con.execute("CREATE OR REPLACE TABLE negocios AS SELECT * FROM vii")
 
     print("tab X_1/X_1_1 (cotistas) e X_5 (liquidez), X (SCR) ...", flush=True)
-    x1 = build_simple("X_1", "TAB_X_NR")
+    x1 = build_simple("X_1", "TAB_X", str_cols=("TAB_X_CLASSE_SERIE",))
+    n0 = len(x1)
+    x1 = x1.drop_duplicates(keep="last")
+    DEDUP_LOG.append({"tabela": "cotistas_serie", "linhas": n0, "duplicatas_removidas": n0 - len(x1)})
     con.execute("CREATE OR REPLACE TABLE cotistas_serie AS SELECT * FROM x1")
-    x11 = build_simple("X_1_1", "TAB_X_NR")
+    x11 = dedup_veiculo(build_simple("X_1_1", "TAB_X_NR"), "cotistas_tipo")
     con.execute("CREATE OR REPLACE TABLE cotistas_tipo AS SELECT * FROM x11")
-    x5 = build_simple("X_5", "TAB_X_VL")
+    x5 = dedup_veiculo(build_simple("X_5", "TAB_X_VL"), "liquidez")
     con.execute("CREATE OR REPLACE TABLE liquidez AS SELECT * FROM x5")
-    x = build_simple("X", "TAB_X_")
+    x = dedup_veiculo(build_simple("X", "TAB_X_"), "scr")
     con.execute("CREATE OR REPLACE TABLE scr AS SELECT * FROM x")
 
     print("cadastro ...", flush=True)
@@ -213,6 +239,7 @@ def main() -> int:
               "cotistas_tipo", "liquidez", "scr"):
         con.execute(f"COPY {t} TO '{OUT}/{t}.parquet' (FORMAT PARQUET, COMPRESSION ZSTD)")
 
+    pd.DataFrame(DEDUP_LOG).to_csv(os.path.join(OUT, "dedup_log.csv"), index=False)
     n = con.execute("SELECT COUNT(*), MIN(DT_COMPTC), MAX(DT_COMPTC) FROM pl").fetchall()
     print("painel PL:", n)
     con.close()

@@ -1,0 +1,329 @@
+#!/usr/bin/env python3
+"""
+Etapa 7 — Painel executivo (Entregável 5): gera relatorio/painel_executivo.html
+a partir dos artefatos de data/analytic/. Autocontido (CSS/JS inline, SVG
+gerado aqui), tema claro/escuro, tooltips e trilha de evidência por indicador.
+
+Reprodução: python3 scripts/07_painel_html.py
+"""
+import json
+import os
+import sys
+
+import pandas as pd
+
+ROOT = os.path.join(os.path.dirname(__file__), "..")
+OUT = os.path.join(ROOT, "data", "analytic")
+DEST = os.path.join(ROOT, "relatorio", "painel_executivo.html")
+CORTE = "2026-06-30"
+
+C1, C2, C3 = "var(--s1)", "var(--s2)", "var(--s3)"
+
+
+def fmt(v, dec=1):
+    return f"{v:,.{dec}f}".replace(",", " ").replace(".", ",").replace(" ", ".")
+
+
+def hbar_block(rows, unit="R$ bi", color=C1, maxw=560):
+    """Lista de barras horizontais com rótulo e valor (hover via data-attrs)."""
+    mx = max(v for _, v in rows)
+    out = []
+    for lbl, v in rows:
+        w = max(0.5, v / mx * 100)
+        out.append(
+            f'<div class="hrow" data-tip="{lbl}: {fmt(v)} {unit}">'
+            f'<div class="hlbl">{lbl}</div>'
+            f'<div class="htrack"><div class="hfill" style="width:{w:.1f}%;background:{color}"></div></div>'
+            f'<div class="hval">{fmt(v)}</div></div>')
+    return "\n".join(out)
+
+
+def main() -> int:
+    s = pd.read_csv(f"{OUT}/serie_mercado_mensal.csv")
+    c = s[s.DT_COMPTC == CORTE].iloc[0]
+    adm = pd.read_csv(f"{OUT}/ranking_administradores.csv")
+    ges = pd.read_csv(f"{OUT}/ranking_gestores.csv")
+    seg = pd.read_csv(f"{OUT}/carteira_segmentos.csv")
+    sub = pd.read_csv(f"{OUT}/subordinacao_agregada.csv")
+    ag = pd.read_csv(f"{OUT}/inadimplencia_aging_serie.csv")
+    scr = pd.read_csv(f"{OUT}/scr_rating_operacoes.csv", index_col=0).dropna()
+    ced = pd.read_csv(f"{OUT}/cedentes_ranking_nomes.csv")
+    tst = pd.read_csv(f"{OUT}/testes_auditoria.csv")
+
+    # ------- linha: PL nominal x real (mensal 2013-2026-06) -------
+    ss = s[s.DT_COMPTC <= CORTE].reset_index(drop=True)
+    W, H, PAD_L, PAD_B, PAD_T = 940, 280, 46, 26, 14
+    ymax = max(ss.pl_total.max(), ss.pl_total_real_jun26.max()) / 1e9
+    ymax = (int(ymax / 200) + 1) * 200
+    n = len(ss)
+
+    def xy(i, v):
+        x = PAD_L + i / (n - 1) * (W - PAD_L - 8)
+        y = PAD_T + (1 - v / ymax) * (H - PAD_T - PAD_B)
+        return x, y
+
+    def path(col):
+        pts = [xy(i, v / 1e9) for i, v in enumerate(ss[col])]
+        return "M" + " L".join(f"{x:.1f},{y:.1f}" for x, y in pts)
+
+    grid, ylabels = [], []
+    for gv in range(0, ymax + 1, 200):
+        _, gy = xy(0, gv)
+        grid.append(f'<line x1="{PAD_L}" y1="{gy:.1f}" x2="{W-8}" y2="{gy:.1f}" class="grid"/>')
+        ylabels.append(f'<text x="{PAD_L-6}" y="{gy+4:.1f}" class="tick" text-anchor="end">{gv}</text>')
+    xticks = []
+    for yr in range(2013, 2027, 2):
+        idx = ss.index[ss.DT_COMPTC.str.startswith(f"{yr}-01")]
+        if len(idx):
+            x, _ = xy(idx[0], 0)
+            xticks.append(f'<text x="{x:.1f}" y="{H-8}" class="tick" text-anchor="middle">{yr}</text>')
+    pts_json = json.dumps([
+        {"m": d[:7], "n": round(p / 1e9, 1), "r": round(r / 1e9, 1)}
+        for d, p, r in zip(ss.DT_COMPTC, ss.pl_total, ss.pl_total_real_jun26)])
+    ex, ey = xy(n - 1, ss.pl_total.iloc[-1] / 1e9)
+    line_svg = f'''
+<svg viewBox="0 0 {W} {H}" id="plchart" role="img" aria-label="Evolução do patrimônio líquido de FIDCs, 2013 a 2026">
+  {''.join(grid)}{''.join(ylabels)}{''.join(xticks)}
+  <path d="{path('pl_total_real_jun26')}" class="lreal"/>
+  <path d="{path('pl_total')}" class="lnom"/>
+  <circle cx="{ex:.1f}" cy="{ey:.1f}" r="4" class="endpt"/>
+  <text x="{ex-6:.1f}" y="{max(ey-10,16):.1f}" class="endlbl" text-anchor="end">R$ {fmt(ss.pl_total.iloc[-1]/1e9,0)} bi</text>
+  <line id="xhair" x1="0" y1="{PAD_T}" x2="0" y2="{H-PAD_B}" class="xhair" style="display:none"/>
+</svg>
+<script type="application/json" id="plpts">{pts_json}</script>'''
+
+    # ------- blocos de barras -------
+    sg = seg[(seg.DT_COMPTC == CORTE) & seg.valor.notna()].sort_values("valor", ascending=False)
+    sg = sg[~sg.segmento.str.contains(r"\(total\)", na=False)]
+    seg_rows = [(r.segmento, r.valor / 1e9) for r in sg.head(10).itertuples()]
+    adm_rows = [(r.nome_admin.title()[:38], r.pl / 1e9) for r in adm.head(8).itertuples()]
+    ges_rows = [(r.gestor.title()[:38], r.pl / 1e9) for r in ges.head(8).itertuples()]
+
+    tot_sub = sub.valor.sum()
+    sub_map = sub.set_index("TIPO_COTA").valor / tot_sub
+    seg100 = ""
+    x0 = 0.0
+    for key, lbl, col in (("senior", "Sênior", C1), ("mezanino", "Mezanino", C2),
+                          ("subordinada", "Subordinada", C3)):
+        wv = float(sub_map.get(key, 0)) * 100
+        seg100 += (f'<div class="stseg" style="left:{x0:.2f}%;width:{max(wv-0.3,0.3):.2f}%;'
+                   f'background:{col}" data-tip="{lbl}: {wv:.1f}% (R$ {fmt(float(sub.set_index("TIPO_COTA").valor.get(key,0))/1e9,0)} bi)"></div>')
+        x0 += wv
+
+    r = ag[ag.DT_COMPTC == CORTE].iloc[0]
+    dc = r.dc_com_risco + r.dc_sem_risco
+    aging_rows = [("1–30 dias", (r.v_i30 + r.vi_i30) / dc * 100),
+                  ("31–90 dias", (r.v_i31_90 + r.vi_i31_90) / dc * 100),
+                  ("91–180 dias", (r.v_i91_180 + r.vi_i91_180) / dc * 100),
+                  ("acima de 180 dias", (r.v_maior_180 + r.vi_maior_180) / dc * 100)]
+    aging_html = hbar_block(aging_rows, unit="% dos DC", color=C2)
+
+    scr_tot = scr.valor.sum()
+    scr_order = ["AA", "A", "B", "C", "D", "E", "F", "G", "H"]
+    scr_rows = [(f"Rating {k}", scr[scr.rating == k].valor.sum() / scr_tot * 100) for k in scr_order]
+    scr_html = hbar_block([x for x in scr_rows if x[1] > 0.01], unit="%", color=C1)
+
+    ced_rows = []
+    for r2 in ced.head(10).itertuples():
+        nome = (r2.razao_social or "—")
+        ced_rows.append(f"<tr><td>{nome.title()}</td><td class='num'>{fmt(r2.exposicao_estimada/1e9)}</td>"
+                        f"<td class='num'>{r2.n_veiculos}</td></tr>")
+
+    chips = "".join(
+        f'<span class="chip {"ok" if r3.status=="PASS" else "warn"}" data-tip="{r3.teste}: {r3.resultado}">'
+        f'{r3.teste.split(" ")[0]}</span>' for r3 in tst.itertuples())
+
+    tiles = [
+        ("PL total", f"R$ {fmt(c.pl_total/1e9,0)} bi", "informes CVM, tab. IV · C001"),
+        ("PL líquido de circularidade", f"R$ {fmt(c.pl_liquido_circular/1e9,0)} bi", "desconta cotas de FIDC intramercado · C004"),
+        ("Veículos informantes", f"{int(c.n_veiculos):,}".replace(",", "."), "classes + fundos legado · C002"),
+        ("Cotistas", f"{fmt(c.n_cotistas/1e3,0)} mil", "tab. X.1 · C007"),
+        ("Inadimplência", f"{fmt((r.inad_com_risco+r.inad_sem_risco)/dc*100)}%", "parcelas vencidas / DC · C016"),
+        ("Subordinação + mezanino", f"{fmt((1-float(sub_map.get('senior',0)))*100)}%", "tab. X.2 · C015"),
+    ]
+    tiles_html = "".join(
+        f'<div class="tile"><div class="tlabel">{a}</div><div class="tvalue">{b}</div>'
+        f'<div class="tsrc">{d}</div></div>' for a, b, d in tiles)
+
+    html = f'''<title>Panorama FIDC Brasil</title>
+<style>
+:root {{
+  --bg:#F5F5F1; --surface:#FFFFFF; --ink:#1B2430; --ink2:#57616E; --muted:#8A93A0;
+  --grid:#E3E5DF; --line:#D6D9D2; --s1:#0E7A55; --s2:#4460C7; --s3:#B26312;
+  --real:#9AA1AB; --ok:#0E7A55; --warnc:#B26312; --tipbg:#1B2430; --tipink:#F5F5F1;
+}}
+@media (prefers-color-scheme: dark) {{ :root:not([data-theme="light"]) {{
+  --bg:#14171A; --surface:#1C2024; --ink:#E8EAED; --ink2:#A5ADB8; --muted:#7A828C;
+  --grid:#2A2F35; --line:#333941; --s1:#17936A; --s2:#6478DC; --s3:#C0762C;
+  --real:#6E7681; --ok:#17936A; --warnc:#C0762C; --tipbg:#E8EAED; --tipink:#14171A;
+}} }}
+:root[data-theme="dark"] {{
+  --bg:#14171A; --surface:#1C2024; --ink:#E8EAED; --ink2:#A5ADB8; --muted:#7A828C;
+  --grid:#2A2F35; --line:#333941; --s1:#17936A; --s2:#6478DC; --s3:#C0762C;
+  --real:#6E7681; --ok:#17936A; --warnc:#C0762C; --tipbg:#E8EAED; --tipink:#14171A;
+}}
+* {{ box-sizing:border-box }}
+body {{ background:var(--bg); color:var(--ink); margin:0;
+  font:15px/1.55 -apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif; }}
+.wrap {{ max-width:1080px; margin:0 auto; padding:36px 24px 64px }}
+header h1 {{ font-family:Georgia,"Times New Roman",serif; font-weight:400;
+  font-size:34px; margin:0 0 4px; letter-spacing:-.01em; text-wrap:balance }}
+.sub {{ color:var(--ink2); margin:0 0 8px }}
+.meta {{ color:var(--muted); font-size:12.5px; text-transform:uppercase; letter-spacing:.06em }}
+section {{ margin-top:40px }}
+h2 {{ font-family:Georgia,serif; font-weight:400; font-size:22px; margin:0 0 4px }}
+.note {{ color:var(--ink2); font-size:13px; margin:0 0 14px; max-width:70ch }}
+.tiles {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:10px; margin-top:22px }}
+.tile {{ background:var(--surface); border:1px solid var(--line); border-radius:6px; padding:14px 16px }}
+.tlabel {{ font-size:12px; color:var(--ink2); text-transform:uppercase; letter-spacing:.05em }}
+.tvalue {{ font-size:24px; font-variant-numeric:tabular-nums; margin-top:2px }}
+.tsrc {{ font-size:11px; color:var(--muted); margin-top:4px }}
+.card {{ background:var(--surface); border:1px solid var(--line); border-radius:6px; padding:18px 20px; overflow-x:auto }}
+.grid {{ stroke:var(--grid); stroke-width:1 }}
+.tick {{ fill:var(--muted); font-size:11px; font-variant-numeric:tabular-nums }}
+.lnom {{ fill:none; stroke:var(--s1); stroke-width:2 }}
+.lreal {{ fill:none; stroke:var(--real); stroke-width:2; stroke-dasharray:5 4 }}
+.endpt {{ fill:var(--s1) }} .endlbl {{ fill:var(--ink); font-size:12px; font-variant-numeric:tabular-nums }}
+.xhair {{ stroke:var(--muted); stroke-width:1; stroke-dasharray:2 3 }}
+.legend {{ display:flex; gap:18px; font-size:13px; color:var(--ink2); margin-top:8px; flex-wrap:wrap }}
+.sw {{ display:inline-block; width:14px; height:3px; vertical-align:middle; margin-right:6px; border-radius:2px }}
+.cols {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:16px }}
+.hrow {{ display:grid; grid-template-columns:minmax(120px,220px) 1fr 64px; gap:10px; align-items:center; padding:3px 0 }}
+.hlbl {{ font-size:13px; color:var(--ink2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis }}
+.htrack {{ background:var(--grid); border-radius:4px; height:14px }}
+.hfill {{ height:14px; border-radius:4px }}
+.hval {{ font-size:13px; text-align:right; font-variant-numeric:tabular-nums }}
+.stack {{ position:relative; height:26px; border-radius:5px; overflow:hidden; background:var(--grid) }}
+.stseg {{ position:absolute; top:0; height:26px }}
+table {{ border-collapse:collapse; width:100%; font-size:14px }}
+th {{ text-align:left; color:var(--ink2); font-size:12px; text-transform:uppercase;
+  letter-spacing:.05em; border-bottom:1px solid var(--line); padding:6px 8px }}
+td {{ border-bottom:1px solid var(--grid); padding:7px 8px }}
+td.num {{ text-align:right; font-variant-numeric:tabular-nums }}
+.chip {{ display:inline-block; font-size:12px; padding:3px 10px; border-radius:99px; margin:3px 4px 0 0;
+  border:1px solid var(--line); font-variant-numeric:tabular-nums }}
+.chip.ok {{ color:var(--ok); border-color:var(--ok) }}
+.chip.warn {{ color:var(--warnc); border-color:var(--warnc) }}
+.badge {{ font-size:11px; color:var(--warnc); border:1px solid var(--warnc); padding:1px 8px; border-radius:99px }}
+#tip {{ position:fixed; display:none; background:var(--tipbg); color:var(--tipink); font-size:12.5px;
+  padding:6px 10px; border-radius:5px; pointer-events:none; max-width:320px; z-index:10;
+  font-variant-numeric:tabular-nums }}
+footer {{ margin-top:48px; color:var(--muted); font-size:12.5px; max-width:80ch }}
+a {{ color:var(--s2) }}
+@media (prefers-reduced-motion: no-preference) {{ .hfill {{ transition:width .5s ease }} }}
+</style>
+<div class="wrap">
+<header>
+  <div class="meta">Mercado brasileiro de fundos de investimento em direitos creditórios</div>
+  <h1>Panorama FIDC Brasil</h1>
+  <p class="sub">Data-base 30/06/2026 · fontes primárias CVM (Dados Abertos) · cada indicador
+  referencia o campo de origem e o claim do livro de evidências (C0xx)</p>
+</header>
+
+<div class="tiles">{tiles_html}</div>
+
+<section>
+  <h2>Evolução do patrimônio líquido</h2>
+  <p class="note">Painel canônico deduplicado (fundo × classe). Série real deflacionada pelo
+  IPCA (base jun/2026). R$ bilhões.</p>
+  <div class="card">{line_svg}
+  <div class="legend"><span><span class="sw" style="background:var(--s1)"></span>PL nominal</span>
+  <span><span class="sw" style="background:var(--real)"></span>PL real (IPCA, base jun/26)</span></div></div>
+</section>
+
+<section>
+  <h2>Carteira por segmento</h2>
+  <p class="note">Dez maiores segmentos dos direitos creditórios (informe mensal, tabela II,
+  subitens sem subtotais). R$ bilhões.</p>
+  <div class="card">{hbar_block(seg_rows)}</div>
+</section>
+
+<section>
+  <h2>Quem administra e quem gere</h2>
+  <p class="note">PL por administrador fiduciário (informe, tab. I) e por gestor (registro CVM,
+  registro ativo mais recente por fundo). Cobertura de 100% do PL nos dois rankings. R$ bilhões.</p>
+  <div class="cols">
+    <div class="card"><h3 style="margin:0 0 10px;font-size:15px">Administradores — top 8 (52,6% do PL nos 5 primeiros)</h3>{hbar_block(adm_rows)}</div>
+    <div class="card"><h3 style="margin:0 0 10px;font-size:15px">Gestores — top 8 (24,1% nos 5 primeiros)</h3>{hbar_block(ges_rows, color=C2)}</div>
+  </div>
+</section>
+
+<section>
+  <h2>Estrutura de capital</h2>
+  <p class="note">Valor das séries de cotas (tab. X.2): quem absorve a primeira perda.</p>
+  <div class="card"><div class="stack">{seg100}</div>
+  <div class="legend">
+    <span><span class="sw" style="background:var(--s1)"></span>Sênior {fmt(float(sub_map.get("senior",0))*100)}%</span>
+    <span><span class="sw" style="background:var(--s2)"></span>Mezanino {fmt(float(sub_map.get("mezanino",0))*100)}%</span>
+    <span><span class="sw" style="background:var(--s3)"></span>Subordinada {fmt(float(sub_map.get("subordinada",0))*100)}%</span>
+  </div></div>
+</section>
+
+<section>
+  <h2>Qualidade de crédito</h2>
+  <div class="cols">
+    <div class="card"><h3 style="margin:0 0 10px;font-size:15px">Atraso (parcelas vencidas, % dos DC)</h3>{aging_html}</div>
+    <div class="card"><h3 style="margin:0 0 10px;font-size:15px">Classificação SCR das operações (%)</h3>{scr_html}</div>
+  </div>
+</section>
+
+<section>
+  <h2>Maiores cedentes identificados <span class="badge">estimativa-piso</span></h2>
+  <p class="note">CNPJs declarados nos informes (9 maiores cedentes por veículo) × % × bucket de
+  DC; razão social pela base pública do CNPJ. Cauda além do top-9 não observável.</p>
+  <div class="card"><table>
+    <thead><tr><th>Cedente</th><th style="text-align:right">Exposição est. (R$ bi)</th><th style="text-align:right">Veículos</th></tr></thead>
+    <tbody>{''.join(ced_rows)}</tbody>
+  </table></div>
+</section>
+
+<section>
+  <h2>Auditoria</h2>
+  <p class="note">18 testes obrigatórios executados sobre a base publicada — verde = aprovado,
+  âmbar = ressalva documentada. Detalhes em <code>data/analytic/testes_auditoria.csv</code>.</p>
+  <div class="card">{chips}</div>
+</section>
+
+<footer>
+Produzido a partir dos informes mensais de FIDC e do registro de fundos da CVM
+(dados.cvm.gov.br), com manifesto de extração (URL + SHA-256) e pipeline
+reproduzível. Valores em R$ correntes, salvo indicação. Estimativas e limitações
+descritas na metodologia. Divergência com o perímetro ANBIMA (+17,2%) documentada
+no teste T14. Este painel não constitui recomendação de investimento.
+</footer>
+</div>
+<div id="tip" role="status"></div>
+<script>
+(function () {{
+  var tip = document.getElementById('tip');
+  function show(t, x, y) {{ tip.textContent = t; tip.style.display = 'block';
+    tip.style.left = Math.min(x + 14, innerWidth - 330) + 'px'; tip.style.top = (y + 14) + 'px'; }}
+  function hide() {{ tip.style.display = 'none'; }}
+  document.querySelectorAll('[data-tip]').forEach(function (el) {{
+    el.addEventListener('mousemove', function (e) {{ show(el.dataset.tip, e.clientX, e.clientY); }});
+    el.addEventListener('mouseleave', hide);
+  }});
+  var svg = document.getElementById('plchart');
+  var pts = JSON.parse(document.getElementById('plpts').textContent);
+  var xh = document.getElementById('xhair');
+  if (svg) svg.addEventListener('mousemove', function (e) {{
+    var r = svg.getBoundingClientRect();
+    var fx = (e.clientX - r.left) / r.width * 940;
+    var i = Math.round((fx - 46) / (940 - 46 - 8) * (pts.length - 1));
+    if (i < 0 || i >= pts.length) {{ hide(); xh.style.display = 'none'; return; }}
+    var x = 46 + i / (pts.length - 1) * (940 - 46 - 8);
+    xh.setAttribute('x1', x); xh.setAttribute('x2', x); xh.style.display = 'block';
+    show(pts[i].m + ' · nominal R$ ' + pts[i].n.toLocaleString('pt-BR') +
+         ' bi · real R$ ' + pts[i].r.toLocaleString('pt-BR') + ' bi', e.clientX, e.clientY);
+  }});
+  if (svg) svg.addEventListener('mouseleave', function () {{ hide(); xh.style.display = 'none'; }});
+}})();
+</script>'''
+    with open(DEST, "w", encoding="utf-8") as f:
+        f.write(html)
+    print("painel gerado:", DEST, len(html), "bytes")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
