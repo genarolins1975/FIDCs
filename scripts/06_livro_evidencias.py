@@ -179,6 +179,25 @@ def main() -> int:
         "df_banco_honda_semestral_1S2025.pdf", "leitura direta da nota explicativa",
         "Confirmado")
 
+    det = pd.read_csv(f"{OUT}/detentores_cda_resumo.csv").iloc[0]
+    add("C029", "Cotas de FIDC detidas por fundos não-FIDC (CDA)",
+        f"R$ {det.vl_detido_por_nao_fidc/1e9:.1f} bi em {int(det.n_fundos_investidores)} fundos",
+        "2026-06", "indústria de fundos", "CVM — CDA (cda_fi_BLC_2_202606)",
+        "detentores_cda_fundos.csv", "Σ VL_MERC_POS_FINAL de cotas cujo CNPJ ∈ universo FIDC",
+        "Confirmado")
+    add("C030", "Posições em cotas de FIDC declaradas como emissor ligado (CDA)",
+        f"R$ {det.vl_posicoes_emissor_ligado/1e9:.1f} bi", "2026-06",
+        "indústria de fundos", "CVM — CDA", "EMISSOR_LIGADO='S'",
+        "Σ VL_MERC_POS_FINAL filtrado", "Confirmado")
+    rf6 = pd.read_csv(f"{OUT}/red_flags_liquidacoes_bcb.csv")
+    u = rf6[rf6.DT_COMPTC == CORTE]
+    add("C031", "PL no corte de veículos ligados ao ecossistema Reag/Master (busca nominal)",
+        f"R$ {u.VL_PL.sum()/1e9:.1f} bi em {u.CNPJ.nunique()} CNPJs; CBSF DTVM "
+        f"(ex-Reag Trust, em liquidação BCB desde 15/01/2026) administrava R$ 51,9 bi/84 veículos",
+        "2026-06", "ecossistema Reag/CBSF", "CVM Informe Mensal + BCB (liquidação) + imprensa",
+        "red_flags_liquidacoes_bcb.csv", "busca nominal em denominação/prestadores",
+        "Confirmado (dados da base); Indiciário (imputações em investigação)")
+
     os.makedirs(AUD, exist_ok=True)
     pd.DataFrame(claims).to_csv(f"{AUD}/livro_evidencias.csv", index=False)
     print(f"{len(claims)} claims gravados em auditoria/livro_evidencias.csv")

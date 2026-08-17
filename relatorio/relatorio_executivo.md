@@ -386,6 +386,48 @@ agente de cobrança — funding de mercado com risco retido no originador.
    estruturas em camadas para segregar risco e distribuir; motivo pelo qual
    toda soma de PL deve ser lida consolidada **[C]**.
 
+## 13-A. Visão de regulador: detentores, casos de uso indevido e triagem
+
+**Quem carrega cotas de FIDC em carteira** (três camadas mensuradas):
+
+1. **O próprio mercado**: R$ 161,6 bi em cotas de FIDC dentro de FIDCs/FIC-FIDCs
+   (circularidade, seção 7) **[C]**.
+2. **A indústria de fundos**: cruzamento da CDA de jun/2026 com o universo
+   FIDC identifica **R$ 163,8 bi detidos por 2.173 fundos não-FIDC** — maiores
+   gestores detentores: Itaú Asset (R$ 16,6 bi em 74 fundos), BTG Asset
+   (R$ 8,0 bi), BB DTVM (R$ 7,8 bi), Genial (R$ 7,1 bi), XP (R$ 6,3 bi).
+   **R$ 76,8 bi dessas posições são declaradas como "emissor ligado"** —
+   quase metade da detenção via fundos fica dentro do próprio conglomerado
+   originador/estruturador (`detentores_cda_*.csv`) **[C]**.
+3. **Instituições financeiras e empresas** (balanços): caso confirmado Banco
+   Honda (R$ 243,2 mi subordinadas) e pistas da seção 11-A; censo completo
+   exige mineração de DFP/ITR **[NI parcial]**.
+
+**Casos documentados de uso indevido** (dossiê completo com fontes e
+advertências em `auditoria/casos_uso_indevido_fidc.md`): Reag/FIDC Gold Style
+(Operação Carbono Oculto, 2025 — ~R$ 1 bi de empresas apontadas como ligadas
+ao PCC; Reag Trust DTVM/CBSF liquidada pelo BCB em 15/01/2026), Banco Master
+(2025 — 52-58 FIDCs afetados, R$ 3,1-3,9 bi), Banco Cruzeiro do Sul (2012 —
+320 mil consignados fictícios cedidos a FIDC cativo), Silverado/Maximum
+(rombo R$ 560 mi; multas CVM de R$ 489,8 mi em 2024), Trendbank (notas
+simuladas) e Union National (falha de auditor e administrador; multas CVM).
+
+**Conexão com a base** **[C]**: o FIDC Gold Style está no universo (R$ 1,87 bi
+no corte); 71 CNPJs ligados ao ecossistema Reag/Master somam R$ 19,3 bi; e a
+**CBSF DTVM (ex-Reag Trust), em liquidação extrajudicial, ainda figurava no
+corte como 7ª maior administradora (R$ 51,9 bi, 84 veículos — ante R$ 77,8
+bi/235 veículos em jun/2025)**, incluindo dois dos oito maiores veículos do
+mercado (Alepo e Esperanza). A migração de administração praticamente se
+completa em jul/2026. Advertência: liquidação do prestador não implica
+ilicitude dos fundos servidos; patrimônios são segregados.
+
+**Triagem de red flags** (tipologia derivada dos casos; sinal ≠ irregularidade;
+lista nominal em `red_flags_regulatorios.csv`): RF1 inadimplência ~zero com
+cedente concentrado — 62 veículos; RF2 recompras/substituições >15% da
+carteira em 12m — 124; RF3 1-2 cotistas + interesse único + subordinação <5%
+— 64; RF4 queda de PL >50% m/m — 62; RF5 crescimento >150% em 12m com cedente
+≥80% — 6. Interseções entre triagens são os candidatos naturais a inspeção.
+
 ## 14. Limitações e agenda
 
 **Limitações** (detalhadas em `docs/metodologia.md`): dados autodeclarados;
@@ -397,7 +439,9 @@ balanços) parcialmente executado**: 1 confirmação em fonte primária (Banco
 Honda) e 7 pistas rotuladas como indiciárias — não é um censo; a mineração
 sistemática de DFP/ITR segue como lacuna declarada.
 
-**Agenda de monitoramento**: (i) mensal — série PL/captação/inadimplência e
+**Agenda de monitoramento**: (0) acompanhar migração dos veículos ex-CBSF e
+desfecho das liquidações BCB (Reag, Master) e seus efeitos nos rankings;
+(i) mensal — série PL/captação/inadimplência e
 alertas; (ii) trimestral — ranking de prestadores e cedentes; (iii) anual —
 casos e concentração; (iv) próxima iteração — DFP/ITR (Par 6), demonstrações
 financeiras dos fundos (pareceres modificados), eventos societários.

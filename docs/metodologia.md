@@ -14,6 +14,7 @@ Data de extração: **17/08/2026** (UTC), registrada arquivo a arquivo em
 | 1 | CVM — Cadastro de fundos (`cad_fi.csv`) e Registro fundo/classe/subclasse (RCVM 175) | papéis institucionais (gestor, custodiante, controlador, auditor), situação, mapeamento classe→fundo |
 | 1 | Resoluções CVM 175 (consolidada), 200 e 240 (textos oficiais) | perímetro regulatório |
 | 1 | BCB/SGS série 433 (IPCA) | deflacionamento |
+| 1 | CVM — CDA (`cda_fi_202606.zip`, bloco BLC_2) | detentores de cotas de FIDC na indústria de fundos; flag EMISSOR_LIGADO |
 | 1 | CVM — Medidas FIE (`medidas_mes_fie_202606.csv`) | segunda fonte primária interna; reconciliação exata na interseção (T16, 99,0% do PL) |
 | 1 | Banco Honda S.A. — DF semestral 30/06/2025 (PDF no manifesto) | confirmação primária de cotas de FIDC em balanço corporativo (Par 6) |
 | 2 | ANBIMA (boletins e notícias oficiais) | validação externa de PL e captação — sem hash: número citado de imprensa/boletim, não reproduzível bit a bit |
