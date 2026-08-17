@@ -54,6 +54,11 @@ def main() -> int:
     cobc = pd.read_csv(f"{OUT}/cedentes_cobertura.csv").iloc[0]
     corp = pd.read_csv(f"{OUT}/investidores_corporativos.csv")
     jul = s.loc[s.DT_COMPTC == "2026-07-31"]
+    detres = pd.read_csv(f"{OUT}/detentores_cda_resumo.csv").iloc[0]
+    detg = pd.read_csv(f"{OUT}/detentores_cda_gestores.csv").dropna(subset=["gestor"])
+    rfs = pd.read_csv(f"{OUT}/red_flags_regulatorios.csv")
+    rf6 = pd.read_csv(f"{OUT}/red_flags_liquidacoes_bcb.csv")
+    cbsf = pd.read_csv(f"{OUT}/cbsf_exreag_serie.csv")
 
     # ------- linha: PL nominal x real (mensal 2013-2026-06) -------
     ss = s[s.DT_COMPTC <= CORTE].reset_index(drop=True)
@@ -155,6 +160,59 @@ def main() -> int:
     jul_pl = fmt(float(jul.pl_total.iloc[0]) / 1e9, 0) if len(jul) else "—"
     med_n = int(med.n_cnpjs_intersecao)
     med_cob = fmt(float(med.cobertura_medidas_sobre_pl_corte) * 100)
+    # ---- supervisão: detentores, red flags, cluster ex-Reag ----
+    detg_rows = [(g.gestor.title()[:36], g.vl_cotas_fidc / 1e9)
+                 for g in detg.head(8).itertuples()]
+    detentores_html = hbar_block(detg_rows, color=C2)
+
+    RF_DESC = {
+        "RF1": "inadimplência ~zero + cedente concentrado (perfil das fraudes de lastro)",
+        "RF2": "recompras/substituições >15% da carteira em 12m (rolagem)",
+        "RF3": "1-2 cotistas + interesse único + subordinação <5% (circuito fechado)",
+        "RF4": "queda de PL >50% m/m (colapso)",
+        "RF5": "crescimento >150% em 12m + cedente >=80% (expansão sem verificação)",
+    }
+    cnt = rfs.red_flag.str[:3].value_counts()
+    rf_html = "".join(
+        f'<div class="hrow" data-tip="{k}: {RF_DESC[k]}">'
+        f'<div class="hlbl">{k} — {RF_DESC[k][:44]}…</div>'
+        f'<div class="htrack"><div class="hfill" style="width:{cnt[k]/cnt.max()*100:.0f}%;background:{C3}"></div></div>'
+        f'<div class="hval">{cnt[k]}</div></div>'
+        for k in ["RF1", "RF2", "RF3", "RF4", "RF5"] if k in cnt)
+
+    u6 = rf6[rf6.DT_COMPTC == CORTE]
+    # sparkline CBSF (ex-Reag): PL administrado, jun/25..jul/26
+    cb = cbsf[cbsf.m <= "2026-07"]
+    W2, H2, P2 = 430, 110, 12
+    mx = cb.pl.max()
+    pts2 = [(P2 + i / (len(cb) - 1) * (W2 - 2 * P2),
+             P2 + (1 - v / mx) * (H2 - 2 * P2 - 14)) for i, v in enumerate(cb.pl)]
+    path2 = "M" + " L".join(f"{x:.1f},{y:.1f}" for x, y in pts2)
+    marcos = {"2025-08": "Carbono Oculto", "2026-01": "liquidação BCB"}
+    marks = ""
+    for i, mrow in enumerate(cb.itertuples()):
+        if mrow.m in marcos:
+            x, y = pts2[i]
+            marks += (f'<circle cx="{x:.1f}" cy="{y:.1f}" r="4" class="endpt" '
+                      f'style="fill:{C3}"/>'
+                      f'<text x="{x:.1f}" y="{min(y+26, H2-4):.1f}" class="tick" '
+                      f'text-anchor="middle">{marcos[mrow.m]}</text>')
+    cbsf_svg = (f'<svg viewBox="0 0 {W2} {H2}" role="img" aria-label="PL administrado pela CBSF ex-Reag">'
+                f'<path d="{path2}" class="lnom" style="stroke:{C3}"/>{marks}'
+                f'<text x="{pts2[0][0]:.1f}" y="{pts2[0][1]-6:.1f}" class="tick" text-anchor="start">R$ {fmt(cb.pl.iloc[0]/1e9,0)} bi · {int(cb.n.iloc[0])} veículos</text>'
+                f'<text x="{pts2[-2][0]:.1f}" y="{pts2[-2][1]-8:.1f}" class="tick" text-anchor="end">R$ {fmt(cb.pl.iloc[-2]/1e9,0)} bi · {int(cb.n.iloc[-2])}</text>'
+                f'</svg>')
+
+    casos_html = "".join(
+        f"<tr><td>{a}</td><td>{b}</td><td>{c_}</td><td>{d}</td></tr>" for a, b, c_, d in [
+        ("Reag / FIDC Gold Style", "2025-26", "carrossel de fundos; recursos sem origem (alegado)", "Operação Carbono Oculto; Reag Trust/CBSF liquidada pelo BCB"),
+        ("Banco Master", "2025-26", "interconexão banco-fundos; 52-58 FIDCs afetados", "liquidação extrajudicial; investigações em curso"),
+        ("Banco Cruzeiro do Sul", "2007-12", "320 mil consignados fictícios cedidos a FIDC cativo", "intervenção, liquidação e falência; denúncias MPF"),
+        ("Silverado / Maximum", "2010s", "duplicatas sem lastro; cedentes ligados à gestora", "multas CVM de R$ 489,8 mi (2024)"),
+        ("Trendbank Multisetorial", "2010s", "operações de crédito simuladas; notas frias", "denúncia FT Greenfield; multas CVM"),
+        ("Union National", "2010s", "insolvência ocultada; falha de gatekeepers", "multas CVM a auditor e administrador"),
+    ])
+
     corp_rows = []
     for rc in corp.itertuples():
         conf = str(rc.confianca)
@@ -315,6 +373,38 @@ a {{ color:var(--s2) }}
     <thead><tr><th>Entidade</th><th>Período</th><th>Posição</th><th>Confiança</th></tr></thead>
     <tbody>{corp_html}</tbody>
   </table></div>
+</section>
+
+<section>
+  <h2>Supervisão e integridade</h2>
+  <p class="note">Visão de regulador. Red flag é sinal estatístico de atenção — não imputação de
+  irregularidade; a liquidação de um prestador não implica ilicitude dos fundos servidos
+  (patrimônios segregados). Dossiê completo com fontes em
+  <code>auditoria/casos_uso_indevido_fidc.md</code>.</p>
+  <div class="tiles" style="margin-top:0">
+    <div class="tile"><div class="tlabel">Cotas de FIDC em fundos não-FIDC</div>
+      <div class="tvalue">R$ {fmt(detres.vl_detido_por_nao_fidc/1e9,0)} bi</div>
+      <div class="tsrc">CDA jun/26 · {f"{int(detres.n_fundos_investidores):,}".replace(",", ".")} fundos · C029</div></div>
+    <div class="tile"><div class="tlabel">Posições "emissor ligado"</div>
+      <div class="tvalue">R$ {fmt(detres.vl_posicoes_emissor_ligado/1e9,0)} bi</div>
+      <div class="tsrc">{fmt(detres.vl_posicoes_emissor_ligado/detres.vl_detido_por_nao_fidc*100,0)}% da detenção via fundos · C030</div></div>
+    <div class="tile"><div class="tlabel">Ecossistema ex-Reag no corte</div>
+      <div class="tvalue">R$ {fmt(u6.VL_PL.sum()/1e9,1)} bi</div>
+      <div class="tsrc">{u6.CNPJ.nunique()} CNPJs (busca nominal) · C031</div></div>
+  </div>
+  <div class="cols" style="margin-top:16px">
+    <div class="card"><h3 style="margin:0 0 10px;font-size:15px">Maiores gestores detentores de cotas de FIDC (CDA, R$ bi)</h3>{detentores_html}</div>
+    <div class="card"><h3 style="margin:0 0 6px;font-size:15px">CBSF DTVM (ex-Reag Trust) — PL administrado</h3>
+      <p class="note" style="margin:0 0 6px">7ª maior administradora no corte, em liquidação extrajudicial (BCB, 15/01/2026); migração dos veículos praticamente completa em jul/26.</p>
+      {cbsf_svg}</div>
+  </div>
+  <div class="cols" style="margin-top:16px">
+    <div class="card"><h3 style="margin:0 0 10px;font-size:15px">Triagem de red flags (nº de veículos por padrão)</h3>{rf_html}
+      <p class="note" style="margin:10px 0 0">Tipologia derivada dos casos documentados; listas nominais em <code>red_flags_regulatorios.csv</code>.</p></div>
+    <div class="card" style="overflow-x:auto"><h3 style="margin:0 0 10px;font-size:15px">Casos documentados</h3>
+      <table><thead><tr><th>Caso</th><th>Anos</th><th>Mecanismo</th><th>Desfecho</th></tr></thead>
+      <tbody>{casos_html}</tbody></table></div>
+  </div>
 </section>
 
 <section>

@@ -150,6 +150,15 @@ def main() -> int:
         ["DENOM_SOCIAL", "VL_PL", "ADMIN"]].assign(
         DENOM_SOCIAL=lambda d: d.DENOM_SOCIAL.str[:55],
         VL_PL=lambda d: (d.VL_PL / 1e6).round(1)).to_string(index=False))
+    # série do PL administrado pela CBSF DTVM (ex-Reag Trust) — para o painel
+    cbsf = con.execute("""
+    SELECT substr(a.DT_COMPTC,1,7) m, SUM(p.VL_PL) pl, COUNT(*) n
+    FROM painel_saneado p JOIN ativo a ON a.CNPJ=p.CNPJ AND a.DT_COMPTC=p.DT_COMPTC
+    WHERE regexp_replace(a.CNPJ_ADMIN,'\\D','','g')='34829992000186'
+      AND a.DT_COMPTC>='2025-06-01'
+    GROUP BY 1 ORDER BY 1""").df()
+    cbsf.to_csv(f"{OUT}/cbsf_exreag_serie.csv", index=False)
+
     con.close()
     return 0
 
