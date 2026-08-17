@@ -1,0 +1,6 @@
+# Bases brutas da CVM: não versionadas (reproduzíveis via scripts/01_download.py
+# + manifesto_fontes.csv com SHA-256 de cada arquivo)
+data/raw/
+data/duckdb/
+*.part
+__pycache__/

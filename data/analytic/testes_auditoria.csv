@@ -1,0 +1,19 @@
+teste,resultado,status,detalhe
+T1 reconciliação PL agregado (DB x CSV publicado),dif 0.000000%,PASS,PL=999.5 bi
+T2 soma por administrador x PL total,dif 0.0000%,PASS,veículos sem CNPJ_ADMIN no informe ficam fora do ranking
+T2b soma por gestor x PL total,dif 0.0029%,PASS,
+T3 CNPJs duplicados por competência (painel),0,PASS,
+T4 veículos com registro 'Cancelado' informando no corte,36,WARN,cancelamentos posteriores à competência são esperados em pequeno número
+T5 veículos com PL negativo no corte,39,WARN,listados em alertas.csv
+T5b direitos creditórios negativos no corte,0,PASS,
+T6 competências na série 2013-01..2026-07,163,PASS,esperado 163 meses
+T7 maior variação m/m do PL agregado,24.19%,PASS,
+T8 top-20 veículos: interseção bruto x publicado,20/20,PASS,
+T9 ranking administradores: recálculo independente top-10,dif máx 0.0330%,PASS,
+T10 HHI veículos recalculado,0.007448 x 0.007448,PASS,
+T11 circularidade intramercado,16.17% do PL,PASS,cotas de FIDC/FIDC-NP no ativo de outros veículos do universo
+T12 veículos com alienações a cedentes/prestadores (12m),"22 veículos, R$ 2.1 bi",PASS,sinal de operações com partes relacionadas
+T13 arquivos-fonte existentes,34/34,PASS,
+T13b integridade SHA-256 (amostra 5),5/5 ok,PASS,
+T14 PL CVM x ANBIMA jun/2026,+17.2% vs ANBIMA,WARN,"perímetros distintos: universo CVM inclui FIC-FIDC e veículos fora da cobertura ANBIMA; divergência analisada no relatório, seção Limitações"
+T15 soma das séries de cotas (X_2) x PL (tab IV),dif 0.04%,PASS,difere por veículos sem X_2 e defasagem de marcação
