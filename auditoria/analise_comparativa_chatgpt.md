@@ -11,7 +11,7 @@ validação mútua de duas implementações independentes sobre a mesma fonte:
 
 | Métrica | Externo (jul/26) | Nosso (jul/26 parcial) | Nosso (jun/26, corte) |
 |---|---|---|---|
-| Unidades reportantes | 4.208 | 4.208 | 4.327 |
+| Unidades reportantes | 4.208 | 4.206 (pós-dedup; 4.208 brutas) | 4.327 |
 | PL bruto | R$ 950,5 bi | R$ 950,5 bi | R$ 999,5 bi |
 | PL dez/2013 | R$ 84,5 bi (430 unid.) | — | R$ 84,5 bi (430 unid.) |
 | PL dez/2025 | R$ 918,6 bi (4.013) | — | R$ 919,3 bi (4.013) |

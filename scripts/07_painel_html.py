@@ -49,6 +49,11 @@ def main() -> int:
     scr = pd.read_csv(f"{OUT}/scr_rating_operacoes.csv", index_col=0).dropna()
     ced = pd.read_csv(f"{OUT}/cedentes_ranking_nomes.csv")
     tst = pd.read_csv(f"{OUT}/testes_auditoria.csv")
+    prov = pd.read_csv(f"{OUT}/provisoes_reducao.csv").iloc[0]
+    med = pd.read_csv(f"{OUT}/reconciliacao_medidas_fie.csv").iloc[0]
+    cobc = pd.read_csv(f"{OUT}/cedentes_cobertura.csv").iloc[0]
+    corp = pd.read_csv(f"{OUT}/investidores_corporativos.csv")
+    jul = s.loc[s.DT_COMPTC == "2026-07-31"]
 
     # ------- linha: PL nominal x real (mensal 2013-2026-06) -------
     ss = s[s.DT_COMPTC <= CORTE].reset_index(drop=True)
@@ -140,11 +145,28 @@ def main() -> int:
         ("Cotistas", f"{fmt(c.n_cotistas/1e3,0)} mil", "tab. X.1 · C007"),
         ("Inadimplência", f"{fmt((r.inad_com_risco+r.inad_sem_risco)/dc*100)}%", "parcelas vencidas / DC · C016"),
         ("Subordinação + mezanino", f"{fmt((1-float(sub_map.get('senior',0)))*100)}%", "tab. X.2 · C015"),
+        ("Atraso provisionado", f"{fmt(prov.razao_reducao_sobre_inadimplencia*100)}%", "redução/recuperação ÷ inadimplência · C027"),
     ]
     tiles_html = "".join(
         f'<div class="tile"><div class="tlabel">{a}</div><div class="tvalue">{b}</div>'
         f'<div class="tsrc">{d}</div></div>' for a, b, d in tiles)
 
+    jul_n = int(jul.n_veiculos.iloc[0]) if len(jul) else 0
+    jul_pl = fmt(float(jul.pl_total.iloc[0]) / 1e9, 0) if len(jul) else "—"
+    med_n = int(med.n_cnpjs_intersecao)
+    med_cob = fmt(float(med.cobertura_medidas_sobre_pl_corte) * 100)
+    corp_rows = []
+    for rc in corp.itertuples():
+        conf = str(rc.confianca)
+        cls = "ok" if conf.startswith("Confirmado") else "warn"
+        pos = str(rc.tipo_cota)
+        if isinstance(rc.valor_cotas_rs_mil, float) and rc.valor_cotas_rs_mil == rc.valor_cotas_rs_mil:
+            pos = f"R$ {fmt(rc.valor_cotas_rs_mil/1e3)} mi — {pos}"
+        corp_rows.append(
+            f"<tr><td>{rc.entidade}</td><td>{rc.periodo}</td>"
+            f"<td style='max-width:420px'>{pos[:160]}</td>"
+            f"<td><span class='chip {cls}'>{conf.split(' (')[0].split(';')[0]}</span></td></tr>")
+    corp_html = "".join(corp_rows)
     html = f'''<title>Panorama FIDC Brasil</title>
 <style>
 :root {{
@@ -225,7 +247,10 @@ a {{ color:var(--s2) }}
 <section>
   <h2>Evolução do patrimônio líquido</h2>
   <p class="note">Painel canônico deduplicado (fundo × classe). Série real deflacionada pelo
-  IPCA (base jun/2026). R$ bilhões.</p>
+  IPCA (base jun/2026). R$ bilhões. A competência de jul/2026, ainda em janela de
+  entrega (JULN informantes; R$ JULPL bi), não integra a série do corte. O PL do corte
+  reconcilia com a base Medidas CVM/FIE com diferença zero em MEDN CNPJs
+  (MEDCOB% do PL) — teste T16.</p>
   <div class="card">{line_svg}
   <div class="legend"><span><span class="sw" style="background:var(--s1)"></span>PL nominal</span>
   <span><span class="sw" style="background:var(--real)"></span>PL real (IPCA, base jun/26)</span></div></div>
@@ -241,7 +266,9 @@ a {{ color:var(--s2) }}
 <section>
   <h2>Quem administra e quem gere</h2>
   <p class="note">PL por administrador fiduciário (informe, tab. I) e por gestor (registro CVM,
-  registro ativo mais recente por fundo). Cobertura de 100% do PL nos dois rankings. R$ bilhões.</p>
+  registro ativo mais recente por fundo). Cobertura de 100% do PL nos dois rankings. R$ bilhões.
+  Rankings brutos de circularidade: nos veículos administrados pelo BTG, 31% do PL são cotas de
+  outros FIDCs do universo (QI: 21%) — líquidos disso, BTG e QI empatam.</p>
   <div class="cols">
     <div class="card"><h3 style="margin:0 0 10px;font-size:15px">Administradores — top 8 (52,6% do PL nos 5 primeiros)</h3>{hbar_block(adm_rows)}</div>
     <div class="card"><h3 style="margin:0 0 10px;font-size:15px">Gestores — top 8 (24,1% nos 5 primeiros)</h3>{hbar_block(ges_rows, color=C2)}</div>
@@ -262,15 +289,17 @@ a {{ color:var(--s2) }}
 <section>
   <h2>Qualidade de crédito</h2>
   <div class="cols">
-    <div class="card"><h3 style="margin:0 0 10px;font-size:15px">Atraso (parcelas vencidas, % dos DC)</h3>{aging_html}</div>
-    <div class="card"><h3 style="margin:0 0 10px;font-size:15px">Classificação SCR das operações (%)</h3>{scr_html}</div>
+    <div class="card"><h3 style="margin:0 0 10px;font-size:15px">Atraso (parcelas vencidas, % dos DC) — 97,9% provisionado</h3>{aging_html}</div>
+    <div class="card"><h3 style="margin:0 0 10px;font-size:15px">Classificação SCR das operações (%) — cobre 51% do estoque</h3>{scr_html}</div>
   </div>
 </section>
 
 <section>
   <h2>Maiores cedentes identificados <span class="badge">estimativa-piso</span></h2>
   <p class="note">CNPJs declarados nos informes (9 maiores cedentes por veículo) × % × bucket de
-  DC; razão social pela base pública do CNPJ. Cauda além do top-9 não observável.</p>
+  DC; razão social pela base pública do CNPJ. Os percentuais declarados cobrem 29,4% do estoque
+  de DCs — o ranking identifica a cabeça da distribuição, não o censo. Estoque atribuído ≠ fluxo
+  cedido no período.</p>
   <div class="card"><table>
     <thead><tr><th>Cedente</th><th style="text-align:right">Exposição est. (R$ bi)</th><th style="text-align:right">Veículos</th></tr></thead>
     <tbody>{''.join(ced_rows)}</tbody>
@@ -278,10 +307,21 @@ a {{ color:var(--s2) }}
 </section>
 
 <section>
+  <h2>Cotas de FIDC em balanços corporativos <span class="badge">não exaustivo</span></h2>
+  <p class="note">Par 6 do mandato, execução parcial: um caso confirmado por leitura direta da
+  demonstração financeira; demais posições identificadas por análise externa aguardam
+  verificação nas notas explicativas originais.</p>
+  <div class="card"><table>
+    <thead><tr><th>Entidade</th><th>Período</th><th>Posição</th><th>Confiança</th></tr></thead>
+    <tbody>{corp_html}</tbody>
+  </table></div>
+</section>
+
+<section>
   <h2>Auditoria</h2>
   <p class="note">18 testes obrigatórios executados sobre a base publicada — verde = aprovado,
   âmbar = ressalva documentada. Detalhes em <code>data/analytic/testes_auditoria.csv</code>.</p>
-  <div class="card">{chips}</div>
+  <div class="card">{chips}<span class="chip ok" data-tip="T16 Informe x Medidas CVM/FIE: diferença zero em MEDN CNPJs (MEDCOB% do PL)">T16</span></div>
 </section>
 
 <footer>
@@ -319,6 +359,10 @@ no teste T14. Este painel não constitui recomendação de investimento.
   if (svg) svg.addEventListener('mouseleave', function () {{ hide(); xh.style.display = 'none'; }});
 }})();
 </script>'''
+    html = (html.replace("JULN", f"{jul_n:,}".replace(",", "."))
+                .replace("JULPL", jul_pl)
+                .replace("MEDN", f"{med_n:,}".replace(",", "."))
+                .replace("MEDCOB", med_cob))
     with open(DEST, "w", encoding="utf-8") as f:
         f.write(html)
     print("painel gerado:", DEST, len(html), "bytes")
