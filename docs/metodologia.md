@@ -14,7 +14,7 @@ Data de extração: **17/08/2026** (UTC), registrada arquivo a arquivo em
 | 1 | CVM — Cadastro de fundos (`cad_fi.csv`) e Registro fundo/classe/subclasse (RCVM 175) | papéis institucionais (gestor, custodiante, controlador, auditor), situação, mapeamento classe→fundo |
 | 1 | Resoluções CVM 175 (consolidada), 200 e 240 (textos oficiais) | perímetro regulatório |
 | 1 | BCB/SGS série 433 (IPCA) | deflacionamento |
-| 2 | ANBIMA (boletins e notícias oficiais) | validação externa de PL e captação |
+| 2 | ANBIMA (boletins e notícias oficiais) | validação externa de PL e captação — sem hash: número citado de imprensa/boletim, não reproduzível bit a bit |
 | 3 | Receita Federal via minhareceita.org | razão social/CNAE de cedentes (resolução de entidades) |
 
 ## 2. Unidade de análise e a transição ICVM 489 → RCVM 175
@@ -103,7 +103,13 @@ a contagem de "classes" propriamente ditas só existe no regime novo.
    não são rastreadas retroativamente (afeta variações 12/36/60m por gestor —
    por isso não publicadas).
 5. **Dados autodeclarados**: informes contêm erros de preenchimento
-   (documentados em `alertas.csv` e nos filtros de sanidade).
+   (documentados em `alertas.csv` e nos filtros de sanidade). A tabela
+   `negocios_anual.csv` é publicada bruta, sem filtro de sanidade — leituras
+   do relatório usam 2023-2026; valores antigos (ex.: recompras 2013) contêm
+   erros notórios de unidade.
+5b. **CNPJs com zeros à esquerda** (ex.: 00.000.000/0001-91 = Banco do
+   Brasil) são válidos e resolvidos normalmente — não confundir com
+   documento malformado.
 6. **Companhias com cotas de FIDC no balanço** (Par 6 do mandato): exigiria
    leitura de notas explicativas de DFP/ITR (não estruturadas em dados
    abertos); tratado como lacuna declarada nesta versão — ver relatório,

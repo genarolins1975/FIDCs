@@ -40,8 +40,8 @@
 6. **Quem cede.** Os cedentes identificáveis (CNPJs declarados nos informes)
    revelam três motores: (i) grandes corporações estruturando fundos próprios
    (Petrobras — R$ 55,4 bi estimados via FIDC do Sistema Petrobras; BRF Energia;
-   montadoras); (ii) fintechs e SCDs originando crédito digital (QI SCD em 73
-   veículos, BMP SCD em 92, CloudWalk, Stone, Cielo); (iii) bancos médios e
+   montadoras); (ii) fintechs e SCDs originando crédito digital (QI SCD em 72
+   veículos, BMP SCD em 91, CloudWalk, Stone, Cielo); (iii) bancos médios e
    financeiras (Votorantim, Volkswagen, Santander Financiamentos) **[FS]**
    (estimativa-piso: informes cobrem apenas os 9 maiores cedentes por veículo).
 7. **Quem retém o risco.** A estrutura agregada de capital é **68,5% cotas
@@ -156,7 +156,10 @@ EY (R$ 150,7 bi). **[C]**
 A verticalização é a marca do mercado: os mesmos grupos (BTG, QI, Oliveira
 Trust, Daycoval) aparecem como administrador, custodiante e controlador de
 grande parte dos veículos — eficiente, mas fonte de risco operacional
-correlacionado (seção 10).
+correlacionado (seção 10). O ranking é bruto de circularidade: nos veículos
+administrados pelo BTG, 31% do PL corresponde a cotas de outros FIDCs do
+próprio universo (QI: 21%; Oliveira Trust: 2%) — líquidos dessa parcela, BTG e
+QI praticamente empatam na liderança (verificação do agente espelho) **[C]**.
 
 ## 6. Maiores veículos
 
@@ -211,13 +214,13 @@ cobertura em `cedentes_cobertura.csv`.
 | 1 | Petrobras | 55,4 | 2 | petróleo (fundo cativo do sistema) |
 | 2 | CloudWalk (InfinitePay) | 8,9 | 5 | adquirência/fintech |
 | 3 | BRF Energia | 7,1 | 1 | energia |
-| 4 | QI SCD | 6,1 | 73 | banking-as-a-service |
+| 4 | QI SCD | 6,1 | 72 | banking-as-a-service |
 | 5 | Cielo | 5,9 | 2 | adquirência |
 | 6 | Marée SCD | 4,1 | 1 | SCD |
 | 7 | Banco Votorantim | 4,0 | 4 | banco |
 | 8 | Stone IP | 3,5 | 2 | adquirência |
 | 9 | Banco Volkswagen | 3,5 | 2 | financeira de montadora |
-| 10 | BMP SCD | 3,3 | 92 | banking-as-a-service |
+| 10 | BMP SCD | 3,3 | 91 | banking-as-a-service |
 
 Também no top-30: Renault, GM, Stellantis, Hyundai (financiamento de
 concessionárias/fornecedores), Havan, Gazin (varejo), Vale, J&F, Santander
@@ -227,7 +230,7 @@ Financiamentos, BMG, Creditas, SumUp, Capital Consig. **[FS]**
 FIDC exclusivo do próprio grupo (Petrobras: cedente e cotista via subsidiárias
 — securitização interna, sem financiamento externo novo **[FS]**); (ii)
 *originação digital* — SCDs cedem diariamente a dezenas de FIDCs de terceiros
-(QI em 73, BMP em 92 veículos): o FIDC é o balanço do crédito fintech
+(QI em 72, BMP em 91 veículos): o FIDC é o balanço do crédito fintech
 brasileiro **[C]**; (iii) *recebíveis de adquirência* (CloudWalk, Stone,
 Cielo); (iv) *montadoras e varejo* — antecipação de recebíveis comerciais.
 
@@ -260,7 +263,7 @@ por ≥12 meses consecutivos — uso estrutural, não pontual, de FIDC como fund
   dos demais **[I — flag por denominação]**.
 - **SCR** (subconjunto reportado ao BCB): AA 53,1%, A 26,8%, B 12,0%, C-G
   4,2%, **H 3,8%** **[C]**.
-- **Recompras e substituições** (tab. VII): R$ 29,6 bi recomprados e R$ 1,6 bi
+- **Recompras e substituições** (tab. VII): R$ 29,5 bi recomprados e R$ 1,6 bi
   substituídos em 2025 — mecanismos que podem mascarar inadimplência ao
   devolver créditos problemáticos ao cedente antes do atraso aparecer;
   monitorar por veículo **[C dados; I interpretação]**.
@@ -276,8 +279,8 @@ por ≥12 meses consecutivos — uso estrutural, não pontual, de FIDC como fund
 | Métrica | Valor |
 |---|---|
 | HHI por veículo | 0,0074 (baixo) |
-| HHI por administrador | 0,079 (moderado) |
-| HHI por gestor | 0,017 (baixo) |
+| HHI por administrador | 0,075 (moderado) |
+| HHI por gestor | 0,021 (baixo) |
 | Top-5 administradores | 52,6% |
 | Top-5 gestores | 24,1% |
 | Top-10 veículos | 18,0% |
