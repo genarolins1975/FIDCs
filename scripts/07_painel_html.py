@@ -59,6 +59,9 @@ def main() -> int:
     rfs = pd.read_csv(f"{OUT}/red_flags_regulatorios.csv")
     rf6 = pd.read_csv(f"{OUT}/red_flags_liquidacoes_bcb.csv")
     cbsf = pd.read_csv(f"{OUT}/cbsf_exreag_serie.csv")
+    rfg = pd.read_csv(f"{OUT}/red_flags_por_gestor.csv")
+    rfd = pd.read_csv(f"{OUT}/red_flags_detentores_cda.csv")
+    rfdr = pd.read_csv(f"{OUT}/red_flags_detentores_resumo.csv").iloc[0]
 
     # ------- linha: PL nominal x real (mensal 2013-2026-06) -------
     ss = s[s.DT_COMPTC <= CORTE].reset_index(drop=True)
@@ -202,6 +205,23 @@ def main() -> int:
                 f'<text x="{pts2[0][0]:.1f}" y="{pts2[0][1]-6:.1f}" class="tick" text-anchor="start">R$ {fmt(cb.pl.iloc[0]/1e9,0)} bi · {int(cb.n.iloc[0])} veículos</text>'
                 f'<text x="{pts2[-2][0]:.1f}" y="{pts2[-2][1]-8:.1f}" class="tick" text-anchor="end">R$ {fmt(cb.pl.iloc[-2]/1e9,0)} bi · {int(cb.n.iloc[-2])}</text>'
                 f'</svg>')
+
+    # gestores com maior PL em veículos sinalizados (tooltip: nº e % da carteira)
+    rfg_html = "".join(
+        f'<div class="hrow" data-tip="{g.gestor.title()}: R$ {fmt(g.pl_sinalizado/1e9)} bi sinalizados '
+        f'em {int(g.n_veiculos_sinalizados)} veículo(s) = {fmt(g.pct_carteira_sinalizada*100,0)}% da carteira do gestor">'
+        f'<div class="hlbl">{g.gestor.title()[:36]}</div>'
+        f'<div class="htrack"><div class="hfill" style="width:{g.pl_sinalizado/rfg.pl_sinalizado.max()*100:.0f}%;background:{C3}"></div></div>'
+        f'<div class="hval">{fmt(g.pl_sinalizado/1e9)}</div></div>'
+        for g in rfg.head(8).itertuples())
+
+    rfd_html = "".join(
+        f'<div class="hrow" data-tip="{d.DENOM_SOCIAL[:80]} (gestor: {str(d.gestor).title()[:50]}): '
+        f'R$ {fmt(d.vl/1e9,2)} bi em {int(d.n_sinalizados)} FIDC(s) sinalizado(s)">'
+        f'<div class="hlbl">{d.DENOM_SOCIAL.title()[:36]}</div>'
+        f'<div class="htrack"><div class="hfill" style="width:{d.vl/rfd.vl.max()*100:.0f}%;background:{C2}"></div></div>'
+        f'<div class="hval">{fmt(d.vl/1e9,2)}</div></div>'
+        for d in rfd.head(8).itertuples())
 
     casos_html = "".join(
         f"<tr><td>{a}</td><td>{b}</td><td>{c_}</td><td>{d}</td></tr>" for a, b, c_, d in [
@@ -474,6 +494,24 @@ a {{ color:var(--s2) }}
     <div class="card" style="overflow-x:auto"><h3 style="margin:0 0 10px;font-size:15px">Casos documentados</h3>
       <table><thead><tr><th>Caso</th><th>Anos</th><th>Mecanismo</th><th>Desfecho</th></tr></thead>
       <tbody>{casos_html}</tbody></table></div>
+  </div>
+  <div class="cols" style="margin-top:16px">
+    <div class="card"><h3 style="margin:0 0 10px;font-size:15px">Gestores com maior PL em veículos sinalizados (R$ bi)</h3>
+      {rfg_html}
+      <p class="note" style="margin:10px 0 0">Passe o mouse para ver nº de veículos e % da carteira
+      do gestor. A 1ª posição ilustra o falso positivo por construção: o FIDC do Sistema
+      Petrobras (BB Gestão) dispara RF1 por ser cativo monocedente com atraso ~zero —
+      exatamente o que a triagem deve capturar para um humano descartar com contexto.</p></div>
+    <div class="card"><h3 style="margin:0 0 10px;font-size:15px">Quem detém os FIDCs sinalizados</h3>
+      <p class="note" style="margin:0 0 8px">Dos R$ {fmt(rfdr.pl_sinalizado_total/1e9,0)} bi sinalizados,
+      <strong>R$ {fmt(rfdr.vl_detido_via_cda/1e9,1)} bi</strong> aparecem como cotas na carteira de
+      {int(rfdr.n_fundos_detentores_cda)} fundos (CDA) — e <strong>{fmt(rfdr.share_emissor_ligado_na_cda*100,0)}%
+      dessas posições são declaradas como emissor ligado</strong>, acima dos 47% do mercado:
+      veículos sinalizados são detidos ainda mais "dentro de casa". O perfil de cotistas
+      (X.1.1) complementa: subordinadas concentradas em fundos e PJs do próprio ecossistema
+      e 668 pessoas físicas expostas a subordinadas sinalizadas
+      (<code>red_flags_cotistas_perfil.csv</code>).</p>
+      {rfd_html}</div>
   </div>
 </section>
 

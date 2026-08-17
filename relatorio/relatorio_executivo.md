@@ -428,6 +428,20 @@ carteira em 12m — 124; RF3 1-2 cotistas + interesse único + subordinação <5
 — 64; RF4 queda de PL >50% m/m — 62; RF5 crescimento >150% em 12m com cedente
 ≥80% — 6. Interseções entre triagens são os candidatos naturais a inspeção.
 
+**Concentração por gestor e detentores dos veículos sinalizados** (novos
+recortes; `red_flags_por_gestor.csv`, `red_flags_detentores_cda.csv`):
+os veículos sinalizados somam R$ 247 bi de PL (a 1ª posição — BB Gestão,
+R$ 61,3 bi — é o FIDC do Sistema Petrobras, falso positivo por construção da
+RF1: cativo monocedente com atraso ~zero); entre gestores com carteira
+relevante sinalizada estão Bradesco (R$ 32,0 bi; 15 veículos), Reag Jus
+(R$ 11,5 bi; 65% da carteira), Petra Capital (R$ 11,2 bi; 82%) e Integral
+(R$ 9,9 bi; 66%). Pelo lado dos detentores, R$ 21,3 bi das cotas sinalizadas
+estão na carteira de 550 fundos (CDA), **50% declaradas como emissor ligado**
+— acima dos 47% do mercado: veículos sinalizados são detidos ainda mais
+"dentro de casa" — e o perfil de cotistas registra 668 pessoas físicas em
+subordinadas sinalizadas. Sinal ≠ irregularidade; a leitura correta é de
+priorização de inspeção.
+
 ## 14. Limitações e agenda
 
 **Limitações** (detalhadas em `docs/metodologia.md`): dados autodeclarados;

@@ -150,6 +150,76 @@ def main() -> int:
         ["DENOM_SOCIAL", "VL_PL", "ADMIN"]].assign(
         DENOM_SOCIAL=lambda d: d.DENOM_SOCIAL.str[:55],
         VL_PL=lambda d: (d.VL_PL / 1e6).round(1)).to_string(index=False))
+    # ---- concentração de veículos sinalizados por gestor ----
+    # unidade: CNPJs distintos sinalizados em qualquer RF1-RF5 no corte
+    flagged = set(out.CNPJ.astype(str))
+    con2 = con
+    gest_map = con2.execute(r"""
+      WITH mapa AS (
+        SELECT regexp_replace(rc.CNPJ_Classe,'\D','','g') cnpj, MAX(rf.Gestor) gestor
+        FROM registro_classe rc JOIN registro_fundo rf USING (ID_Registro_Fundo) GROUP BY 1
+        UNION ALL
+        SELECT regexp_replace(CNPJ_Fundo,'\D','','g'), MAX(Gestor) FROM registro_fundo GROUP BY 1)
+      SELECT cnpj, MAX(gestor) gestor FROM mapa WHERE gestor IS NOT NULL GROUP BY 1""").df()
+    pl_corte = con2.execute(f"""
+      SELECT CNPJ, DENOM_SOCIAL, VL_PL FROM painel_saneado WHERE DT_COMPTC='{CORTE}'""").df()
+    pl_corte = pl_corte.merge(gest_map, left_on="CNPJ", right_on="cnpj", how="left")
+    pl_corte["flagged"] = pl_corte.CNPJ.isin(flagged)
+    nflags = out.groupby("CNPJ").red_flag.nunique()
+    pl_corte["n_flags"] = pl_corte.CNPJ.map(nflags).fillna(0).astype(int)
+    g = (pl_corte.groupby("gestor", dropna=True)
+         .agg(pl_total_gestor=("VL_PL", "sum"),
+              pl_sinalizado=("VL_PL", lambda x: x[pl_corte.loc[x.index, "flagged"]].sum()),
+              n_veiculos_sinalizados=("flagged", "sum"),
+              n_veiculos=("CNPJ", "nunique"))
+         .reset_index())
+    g["pct_carteira_sinalizada"] = g.pl_sinalizado / g.pl_total_gestor
+    g = g[g.n_veiculos_sinalizados > 0].sort_values("pl_sinalizado", ascending=False)
+    g.to_csv(f"{OUT}/red_flags_por_gestor.csv", index=False)
+    print("\nGestores com maior PL sinalizado (top 8):")
+    print(g.head(8).assign(pl_sinalizado=lambda d: (d.pl_sinalizado/1e9).round(2),
+                           pct=lambda d: (d.pct_carteira_sinalizada*100).round(0))[
+        ["gestor", "pl_sinalizado", "n_veiculos_sinalizados", "pct"]].to_string(index=False))
+
+    # ---- detentores dos veículos sinalizados ----
+    # (a) via CDA: fundos não-FIDC que detêm cotas dos sinalizados
+    import os as _os
+    cda_path = _os.path.join(ROOT, "data", "raw", "extracted_cda", "cda_fi_BLC_2_202606.csv")
+    blc = pd.read_csv(cda_path, sep=";", encoding="latin1", dtype=str, quoting=3)
+    blc["VL_MERC_POS_FINAL"] = pd.to_numeric(blc.VL_MERC_POS_FINAL, errors="coerce")
+    blc["cnpj_investidor"] = blc.CNPJ_FUNDO_CLASSE.str.replace(r"\D", "", regex=True)
+    blc["cnpj_cota"] = blc.CNPJ_FUNDO_CLASSE_COTA.str.replace(r"\D", "", regex=True)
+    posf = blc[blc.cnpj_cota.isin(flagged)].copy()
+    det = (posf.groupby(["cnpj_investidor", "DENOM_SOCIAL"], as_index=False)
+           .agg(vl=("VL_MERC_POS_FINAL", "sum"),
+                n_sinalizados=("cnpj_cota", "nunique"),
+                n_ligadas=("EMISSOR_LIGADO", lambda x: (x == "S").sum())))
+    det = det.merge(gest_map, left_on="cnpj_investidor", right_on="cnpj", how="left")
+    det = det.sort_values("vl", ascending=False)
+    det.to_csv(f"{OUT}/red_flags_detentores_cda.csv", index=False)
+    lig_share = posf[posf.EMISSOR_LIGADO == "S"].VL_MERC_POS_FINAL.sum() / max(posf.VL_MERC_POS_FINAL.sum(), 1)
+    # (b) perfil de cotistas (X.1.1) dos sinalizados
+    fl_list = "','".join(sorted(flagged))
+    cot = con2.execute(f"""
+      SELECT * FROM cotistas_tipo WHERE DT_COMPTC='{CORTE}' AND CNPJ IN ('{fl_list}')""").df()
+    cols = [c for c in cot.columns if c.startswith("TAB_X_NR_COTST_")]
+    perfil = cot[cols].sum().rename("n_cotistas").to_frame()
+    perfil["classe"] = ["senior" if "_SENIOR_" in i else "subordinada" for i in perfil.index]
+    perfil["categoria"] = [i.replace("TAB_X_NR_COTST_SENIOR_", "").replace("TAB_X_NR_COTST_SUBORD_", "")
+                           for i in perfil.index]
+    perfil.to_csv(f"{OUT}/red_flags_cotistas_perfil.csv")
+    resumo_det = pd.DataFrame([{
+        "pl_sinalizado_total": pl_corte[pl_corte.flagged].VL_PL.sum(),
+        "n_veiculos_sinalizados": int(pl_corte.flagged.sum()),
+        "vl_detido_via_cda": posf.VL_MERC_POS_FINAL.sum(),
+        "share_emissor_ligado_na_cda": lig_share,
+        "n_fundos_detentores_cda": det.cnpj_investidor.nunique(),
+    }])
+    resumo_det.to_csv(f"{OUT}/red_flags_detentores_resumo.csv", index=False)
+    print("\nDetentores CDA dos sinalizados:", round(posf.VL_MERC_POS_FINAL.sum()/1e9, 2),
+          "bi em", det.cnpj_investidor.nunique(), "fundos; emissor ligado:",
+          f"{lig_share:.0%}")
+
     # série do PL administrado pela CBSF DTVM (ex-Reag Trust) — para o painel
     cbsf = con.execute("""
     SELECT substr(a.DT_COMPTC,1,7) m, SUM(p.VL_PL) pl, COUNT(*) n
