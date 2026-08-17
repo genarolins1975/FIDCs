@@ -79,8 +79,15 @@
   (boletins). **Resolução de entidades**: base pública do CNPJ (Receita
   Federal, via minhareceita.org).
 - **Trilha**: cada arquivo com URL, SHA-256, tamanho e timestamp em
-  `manifesto_fontes.csv` (34 arquivos). Scripts numerados `01`-`05` reproduzem
+  `manifesto_fontes.csv` (36 arquivos). Scripts numerados `01`-`08` reproduzem
   o pipeline de ponta a ponta.
+- **Validação interna dupla**: o PL do corte reconcilia com a base "Medidas
+  CVM/FIE" (segunda publicação primária da própria CVM) com **diferença zero
+  na interseção de 4.314 CNPJs = 99,0% do PL** (teste T16,
+  `reconciliacao_medidas_fie.csv`). Um pipeline externo independente sobre a
+  mesma fonte (data-base jul/2026) chegou a agregados idênticos aos da nossa
+  observação parcial de julho (4.208 unidades; R$ 950,5 bi), reforçando a
+  reprodutibilidade — ver `auditoria/analise_comparativa_chatgpt.md`.
 - **Data de corte**: 30/06/2026 — última competência completa (jul/2026 já
   publicada, porém com ~120 informantes a menos; usada apenas como parcial).
 
@@ -148,10 +155,12 @@ Banco Bradesco (R$ 40,6 bi), BTG Pactual Asset Management (R$ 32,9 bi), CBSF
 Trust (R$ 29,8 bi). Cauda longa: gestores independentes de crédito (Solis,
 Tercon, Genial, Empírica, Captalys etc.).
 
-**Custodiantes** (registro CVM, classes FIDC): BTG Pactual (R$ 162,5 bi),
-QI CTVM (R$ 138,7 bi), Oliveira Trust (R$ 119,5 bi), Daycoval (R$ 68,5 bi),
-Banco do Brasil (R$ 61,2 bi). **Auditores**: PwC (R$ 210,4 bi), Next (R$ 174,5 bi),
-EY (R$ 150,7 bi). **[C]**
+**Custodiantes** (registro CVM, classes FIDC; cobertura 99,1% do PL): BTG
+Pactual (R$ 162,5 bi), QI CTVM (R$ 138,7 bi), Oliveira Trust (R$ 119,5 bi),
+Daycoval (R$ 68,5 bi), Banco do Brasil (R$ 61,2 bi). **Auditores** (cobertura
+97,3%): PwC (R$ 210,4 bi), Next (R$ 174,5 bi), EY (R$ 150,7 bi). **[C]**
+O campo controlador é preenchido para apenas **7,0% do PL** — o ranking de
+controladores é publicado somente como ilustrativo (`prestadores_cobertura.csv`).
 
 A verticalização é a marca do mercado: os mesmos grupos (BTG, QI, Oliveira
 Trust, Daycoval) aparecem como administrador, custodiante e controlador de
@@ -265,6 +274,10 @@ por ≥12 meses consecutivos — uso estrutural, não pontual, de FIDC como fund
   DCs, em 1.858 veículos): AA 53,1%, A 26,8%, B 12,0%, C-G 4,2%, **H 3,8%**
   **[C]**. A metade não coberta (recebíveis não bancários) tende a ser mais
   opaca que a coberta.
+- **Provisões/redução de valor** (campos I2A11/I2B11): R$ 63,3 bi no corte,
+  equivalentes a **97,9% das parcelas inadimplentes** — o mercado, em
+  agregado, carrega o atraso quase integralmente provisionado **[C]**
+  (`provisoes_reducao.csv`).
 - **Recompras e substituições** (tab. VII): R$ 29,5 bi recomprados e R$ 1,6 bi
   substituídos em 2025 — mecanismos que podem mascarar inadimplência ao
   devolver créditos problemáticos ao cedente antes do atraso aparecer;
@@ -291,6 +304,25 @@ A infraestrutura fiduciária (administração/custódia/controladoria) é o pont
 de estrangulamento competitivo — e de risco sistêmico operacional: falha de um
 administrador top-3 afetaria centenas de veículos simultaneamente. **[C]**
 
+## 11-A. Investidores corporativos identificáveis (não exaustivo)
+
+O Par 6 do mandato (cotas de FIDC em balanços) passa a ter execução parcial,
+com verificação em fonte primária iniciada nesta versão
+(`investidores_corporativos.csv`):
+
+| Entidade | Período | Cotas | Confiança |
+|---|---|---|---|
+| **Banco Honda S.A.** | 30/06/2025 | **R$ 243,2 mi** subordinadas (Auto Honda R$ 179,9 mi; Moto Honda R$ 63,2 mi), VJR nível 1 — DF semestral, notas 04 e 8c | **Confirmado** (verificação própria; PDF no manifesto) |
+| Grupo Casas Bahia | 31/12/2025 | Emissões do GCB Fornecedores FIDC (R$ 555 mi + R$ 200 mi) confirmadas; saldo de R$ 1,09 bi na controladora reportado por análise externa | Uso: Fortemente suportado; saldo: Indiciário |
+| Guararapes (Midway), Direcional, Heringer, C&A (C&A Pay), Quero-Quero (Verdecard), Caixa (consolidação ACR IV/Ânima) | 2025 | Posições/consolidações reportadas por análise externa sobre DF/ITR | Indiciário — verificação própria pendente |
+
+**Este quadro não é um ranking**: um Top-20 nacional de empresas com cotas em
+balanço segue não certificável sem mineração sistemática de notas
+explicativas (agenda prioritária). O caso Banco Honda ilustra o padrão
+econômico completo: o banco origina o crédito, cede aos FIDCs do grupo,
+retém integralmente as cotas subordinadas (primeira perda) e atua como
+agente de cobrança — funding de mercado com risco retido no originador.
+
 ## 12. Respostas às perguntas obrigatórias
 
 1. **Crescimento: crédito novo ou reestruturação?** Ambos, com predominância de
@@ -304,8 +336,10 @@ administrador top-3 afetaria centenas de veículos simultaneamente. **[C]**
 4. **Cessão × financiamento efetivo**: R$ 262,1 bi (37% dos DCs) sem
    transferência substancial de risco — financiamento garantido, não venda
    definitiva **[C]**.
-5. **Baixa contábil vs envolvimento continuado**: exige DFP/ITR das cedentes;
-   **[NI nesta versão — lacuna declarada]** (agenda, seção 14).
+5. **Baixa contábil vs envolvimento continuado**: parcialmente respondido —
+   caso confirmado (Banco Honda: cessão aos FIDCs do grupo com retenção
+   integral das subordinadas = envolvimento continuado, seção 11-A); censo
+   completo segue **[NI — agenda]**.
 6. **Exposição a instituições financeiras**: bancos/financeiras aparecem como
    cedentes (Votorantim, VW, Santander Fin., BMG…), administradores e
    custodiantes; cotistas bancários: 1,2 mil posições subordinadas (contagem)
@@ -358,9 +392,10 @@ administrador top-3 afetaria centenas de veículos simultaneamente. **[C]**
 sacados não identificáveis; valores por cotista não públicos; gestor histórico
 não rastreado (registro é fotografia); cedentes = piso (top-9); divergência de
 perímetro com ANBIMA (+17,2%, decomposta: FIC-FIDC + cobertura associativa);
-inferência NP por denominação é indiciária; **Par 6 do mandato (cotas de FIDC
-em balanços de companhias) não executado nesta versão** — exige mineração de
-notas explicativas DFP/ITR, declarado como lacuna, não estimado.
+inferência NP por denominação é indiciária; **Par 6 do mandato (cotas de FIDC em
+balanços) parcialmente executado**: 1 confirmação em fonte primária (Banco
+Honda) e 7 pistas rotuladas como indiciárias — não é um censo; a mineração
+sistemática de DFP/ITR segue como lacuna declarada.
 
 **Agenda de monitoramento**: (i) mensal — série PL/captação/inadimplência e
 alertas; (ii) trimestral — ranking de prestadores e cedentes; (iii) anual —

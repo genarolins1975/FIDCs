@@ -160,6 +160,25 @@ def main() -> int:
         "ANBIMA (boletim, via imprensa)", "T14", "divergência +17,2% documentada",
         "Conflitante (perímetro)")
 
+    rec = pd.read_csv(f"{OUT}/reconciliacao_medidas_fie.csv")
+    add("C026", "Reconciliação Informe x Medidas CVM/FIE (interseção)",
+        f"dif {rec.diferenca_relativa.iloc[0]:.6f}; {int(rec.n_cnpjs_intersecao.iloc[0])} CNPJs; "
+        f"{rec.cobertura_medidas_sobre_pl_corte.iloc[0]:.1%} do PL", "2026-06", "mercado",
+        "CVM — Medidas FIE + Informe Mensal", "reconciliacao_medidas_fie.csv",
+        "Σ PL informe vs Σ PL medidas na interseção de CNPJs", "Confirmado")
+    prov = pd.read_csv(f"{OUT}/provisoes_reducao.csv")
+    add("C027", "Provisões/redução de valor sobre inadimplência",
+        f"R$ {(prov.red_com_risco.iloc[0]+prov.red_sem_risco.iloc[0])/1e9:.1f} bi "
+        f"({prov.razao_reducao_sobre_inadimplencia.iloc[0]:.1%} da inadimplência)",
+        "2026-06", "mercado", "CVM Informe Mensal FIDC", "tab_I / TAB_I2A11+I2B11",
+        "Σ redução / Σ parcelas inadimplentes", "Confirmado")
+    add("C028", "Cotas subordinadas de FIDC no balanço do Banco Honda",
+        "R$ 243,173 mi (Auto Honda 179.943 + Moto Honda 63.230, R$ mil), VJR nível 1",
+        "2025-06-30", "Banco Honda S.A. (CNPJ 03.634.220/0001-65)",
+        "DF semestral 30/06/2025, notas 04 e 8c (bancohonda.com.br; PDF no manifesto)",
+        "df_banco_honda_semestral_1S2025.pdf", "leitura direta da nota explicativa",
+        "Confirmado")
+
     os.makedirs(AUD, exist_ok=True)
     pd.DataFrame(claims).to_csv(f"{AUD}/livro_evidencias.csv", index=False)
     print(f"{len(claims)} claims gravados em auditoria/livro_evidencias.csv")

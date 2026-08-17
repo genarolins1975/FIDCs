@@ -14,7 +14,10 @@ Data de extração: **17/08/2026** (UTC), registrada arquivo a arquivo em
 | 1 | CVM — Cadastro de fundos (`cad_fi.csv`) e Registro fundo/classe/subclasse (RCVM 175) | papéis institucionais (gestor, custodiante, controlador, auditor), situação, mapeamento classe→fundo |
 | 1 | Resoluções CVM 175 (consolidada), 200 e 240 (textos oficiais) | perímetro regulatório |
 | 1 | BCB/SGS série 433 (IPCA) | deflacionamento |
+| 1 | CVM — Medidas FIE (`medidas_mes_fie_202606.csv`) | segunda fonte primária interna; reconciliação exata na interseção (T16, 99,0% do PL) |
+| 1 | Banco Honda S.A. — DF semestral 30/06/2025 (PDF no manifesto) | confirmação primária de cotas de FIDC em balanço corporativo (Par 6) |
 | 2 | ANBIMA (boletins e notícias oficiais) | validação externa de PL e captação — sem hash: número citado de imprensa/boletim, não reproduzível bit a bit |
+| 3 | Relatório externo (ChatGPT, jul/2026) | benchmark e descoberta de pistas (Par 6); nunca sustenta números — ver `auditoria/analise_comparativa_chatgpt.md` |
 | 3 | Receita Federal via minhareceita.org | razão social/CNAE de cedentes (resolução de entidades) |
 
 ## 2. Unidade de análise e a transição ICVM 489 → RCVM 175
@@ -128,6 +131,7 @@ a contagem de "classes" propriamente ditas só existe no regime novo.
 
 ```bash
 python3 scripts/01_download.py            # baixa fontes + manifesto SHA-256
+# ... (08_validacoes_extra.py requer medidas_mes_fie_202606.csv, ver manifesto)
 python3 scripts/02_build.py               # constrói DuckDB + parquet
 python3 scripts/02b_build_series_classes.py
 python3 scripts/03_analytics.py           # séries, rankings, alertas
