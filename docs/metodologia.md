@@ -65,6 +65,13 @@ a contagem de "classes" propriamente ditas só existe no regime novo.
   top-9 cedentes por veículo, percentuais entre 0 e 100. É **estimativa
   inferior** (cauda além do top-9 não observável) e **indicador calculado**,
   não valor contábil.
+- **Classificação SCR (bloco X.8)**: campos `TAB_X_SCR_RISCO_OPER_AA..H`
+  (classificação CMN 2.682 das operações reportadas ao SCR/BCB, declarada
+  pelo administrador). Cobertura no corte: **R$ 362,2 bi = 51,0% do estoque
+  de DCs, em 1.858 veículos** — a distribuição AA-H refere-se apenas a essa
+  parcela (créditos de origem financeira rastreáveis no SCR), não ao mercado
+  inteiro; duplicatas mercantis, precatórios e créditos judiciais ficam fora
+  por construção.
 - **Série real**: deflator IPCA (SGS 433), base jun/2026.
 - **HHI** = Σ s², s = participação no PL do corte.
 

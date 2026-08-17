@@ -261,8 +261,10 @@ por ≥12 meses consecutivos — uso estrutural, não pontual, de FIDC como fund
   é fortemente influenciada pela **composição** (crescimento acelerado de
   carteiras novas); veículos com nome "não padronizado" rodam a 12,3% vs 8,7%
   dos demais **[I — flag por denominação]**.
-- **SCR** (subconjunto reportado ao BCB): AA 53,1%, A 26,8%, B 12,0%, C-G
-  4,2%, **H 3,8%** **[C]**.
+- **SCR** (subconjunto reportado ao BCB — R$ 362,2 bi, 51,0% do estoque de
+  DCs, em 1.858 veículos): AA 53,1%, A 26,8%, B 12,0%, C-G 4,2%, **H 3,8%**
+  **[C]**. A metade não coberta (recebíveis não bancários) tende a ser mais
+  opaca que a coberta.
 - **Recompras e substituições** (tab. VII): R$ 29,5 bi recomprados e R$ 1,6 bi
   substituídos em 2025 — mecanismos que podem mascarar inadimplência ao
   devolver créditos problemáticos ao cedente antes do atraso aparecer;
