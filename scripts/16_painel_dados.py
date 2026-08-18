@@ -284,21 +284,84 @@ def main() -> int:
            "cda_fi_BLC_2",
            "Só a indústria de fundos: bancos, empresas e pessoas físicas ficam fora.")
 
+    rf2s = read("rf2_score_veiculo.csv")
+    rf2c = read("rf2_catalogo.csv")
+    if rf2s is not None:
+        vc = rf2s.classificacao.value_counts()
+        ind("rf_nao_classificavel", int(vc.get("não classificável", 0)), "un",
+            "Veículos não classificáveis por cobertura insuficiente",
+            "COUNT(cobertura_dados_pct < 50)", "metodologia própria sobre informe CVM",
+            "rf2_score_veiculo.csv", "calculado", "Indicador calculado", None,
+            "Cobertura insuficiente NUNCA é lida como baixo risco.", None)
+        ind("rf_atencao_alta", int(vc.get("atenção alta", 0)), "un",
+            "Veículos na faixa de atenção alta",
+            "score ≥ p99 da distribuição do próprio mercado",
+            "metodologia própria sobre informe CVM", "rf2_score_veiculo.csv",
+            "calculado", "Indicador calculado", None,
+            "Faixa estatística, não imputação. Fundos de NPL e distressed disparam por desenho.",
+            None)
+        ind("rf_sem_sinal", int(vc.get("sem sinal disparado", 0)), "un",
+            "Veículos sem nenhum sinal disparado", "COUNT(n_disparos = 0)",
+            "metodologia própria sobre informe CVM", "rf2_score_veiculo.csv",
+            "calculado", "Indicador calculado", None, None, None)
+    if rf2c is not None:
+        ind("rf_n_sinais", len(rf2c), "un", "Sinais catalogados",
+            "COUNT(*) do catálogo", "metodologia própria", "rf2_catalogo.csv",
+            "calculado", "Indicador calculado", None,
+            "Distribuídos em 8 pilares, com limiar percentílico calculado sobre o mercado.",
+            None)
+
+    rjp = read("rj_processos.csv")
+    if rjp is not None:
+        ind("rj_processos", len(rjp), "un",
+            "Processos de recuperação judicial e falência coletados",
+            "COUNT(*) da consulta ao DataJud", "DataJud/CNJ (API pública)",
+            "rj_processos.csv", "observado", "Fato confirmado por fonte primária", None,
+            "A API não retorna as partes: o casamento com CNPJs de cedentes é impossível "
+            "por essa via e foi feito por fonte pública complementar.", None)
+    rjm = read("rj_matches_cedentes.csv")
+    if rjm is not None and len(rjm):
+        cnpj_ok = rjm[rjm.chave_casamento.astype(str).str.contains("cnpj", case=False, na=False)] \
+            if "chave_casamento" in rjm.columns else rjm
+        ind("rj_vinculos", len(rjm), "un",
+            "Vínculos entre cedentes e empresas em recuperação ou falência",
+            "casamento por CNPJ entre cedentes do informe e marcador cadastral de RJ",
+            "CVM (tab I) + base pública do CNPJ (art. 69 da Lei 11.101/2005)",
+            "rj_matches_cedentes.csv", "calculado", "Fato confirmado por fonte primária",
+            None, "O DataJud não retorna as partes do processo; o estado processual é lido "
+            "do sufixo obrigatório no nome empresarial constante do cadastro CNPJ.", None)
+        ind("rj_exposicao", float(rjm.exposicao_estimada.sum()), "R$",
+            "Estoque atribuído a cedentes com recuperação ou falência",
+            "Σ exposição estimada dos cedentes com marcador cadastral",
+            "CVM (tab I) + base pública do CNPJ", "rj_matches_cedentes.csv",
+            "estimado", "Indício forte", None,
+            "Mede ORIGINAÇÃO, não perda: o recebível pode estar performando normalmente. "
+            "Estar em recuperação judicial não é evidência de irregularidade.", None)
+
+    rjc = read("rj_casos_confirmados.csv")
+    if rjc is not None:
+        ind("rj_casos", len(rjc), "un",
+            "Empresas ligadas a FIDCs com RJ ou falência documentada",
+            "casos com fonte pública citada", "fontes públicas oficiais e imprensa",
+            "rj_casos_confirmados.csv", "calculado",
+            "Nível de evidência declarado caso a caso", None,
+            "Estar em recuperação judicial não é evidência de irregularidade.", None)
+
     # red flags v2 (se disponível) — senão, v1
-    rf2 = read("rf2_score_veiculo.csv")
-    rfcat = read("rf2_catalogo.csv")
+    rf2, rfcat = rf2s, rf2c
     if rf2 is not None and rfcat is not None:
         tabela("rf_score", rf2.sort_values("score_risco", ascending=False),
-               [c_ for c_ in ["denom_social", "entidade", "DENOM_SOCIAL", "CNPJ",
-                              "score_risco", "materialidade_financeira",
-                              "cobertura_dados", "persistencia_media", "classificacao"]
+               [c_ for c_ in ["DENOM_SOCIAL", "VL_PL", "score_risco", "classificacao",
+                              "materialidade_soma_rs", "cobertura_dados_pct",
+                              "persistencia_media_meses", "n_criticos", "n_altos"]
                 if c_ in rf2.columns],
                "Score de risco por veículo (experimental)",
                "CVM — informe mensal", "múltiplos campos",
                "Score alto NÃO é imputação de irregularidade. Cobertura < 50% ⇒ não classificável.")
         tabela("rf_catalogo", rfcat,
-               [c_ for c_ in ["id", "pilar", "nome", "severidade", "limiar",
-                              "cobertura_pct", "explicacoes_benignas"] if c_ in rfcat.columns],
+               [c_ for c_ in ["sinal_id", "pilar", "nome", "severidade", "limiar",
+                              "limiar_origem", "cobertura_universo_pct",
+                              "explicacoes_benignas"] if c_ in rfcat.columns],
                "Catálogo de sinais (8 pilares)", "metodologia própria",
                "docs/METODOLOGIA_RED_FLAGS.md",
                "Metodologia experimental enquanto os pesos não forem validados por backtest.",
@@ -313,6 +376,16 @@ def main() -> int:
            "DataJud/CNJ e fontes públicas", "processos judiciais",
            "Estar em recuperação judicial NÃO é evidência de irregularidade. "
            "Classificação concursal/extraconcursal depende do contrato e da data do fato gerador.")
+
+    if rjm is not None and len(rjm):
+        tabela("rj_vinculos", rjm.sort_values("exposicao_estimada", ascending=False),
+               ["razao_social_cedente", "exposicao_estimada", "n_veiculos", "evento",
+                "data_evento", "papel_fidc", "nivel_evidencia"],
+               "Cedentes com recuperação judicial, extrajudicial ou falência",
+               "CVM tab I + base pública do CNPJ", "marcador do art. 69 da Lei 11.101/2005",
+               "Exposição = estoque atribuído de recebíveis originados, não dívida nem perda. "
+               "Instituições financeiras não podem usar recuperação judicial (art. 2º, II).",
+               limite=30)
 
     casos = read("casos_regulatorios.csv")
     tabela("casos", casos,

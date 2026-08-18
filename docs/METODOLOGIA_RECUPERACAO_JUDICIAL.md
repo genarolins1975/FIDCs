@@ -365,7 +365,66 @@ logou o erro e seguiu.
 
 ---
 
-## 10. O que este módulo deliberadamente não faz
+## 10. Resultados da execução de 18/08/2026
+
+**DataJud.** Acessível. Coletados **3.916 processos** de RJ (1.701) e falência
+(2.215) ajuizados nos 24 meses anteriores nos cinco tribunais — TJSP 1.705,
+TJRJ 829, TJMG 543, TJRS 428, TJPR 411 —, sem falha em nenhum deles. **Nenhum
+traz partes**, conforme §3.1: a coluna `tem_partes_no_datajud` é `False` em
+100% das linhas, e o casamento processo × cedente é impossível por esta via.
+
+**Casamento por CNPJ.** O cadastro CNPJ foi resolvido para **2.202 dos 2.207
+CNPJs de cedentes** do corte (100%). Desse universo, **86 cedentes carregam
+marcador legal de RJ ou falência na própria razão social**, e outros 11 casos
+vieram da curadoria com CNPJ público — **97 vínculos afirmados por CNPJ
+idêntico**. Outros 10 casos, sem CNPJ público, ficaram registrados como
+correspondência por nome não validada, com o vínculo **não afirmado**.
+
+A exposição estimada somada dos cedentes com situação de RJ/falência é da ordem
+de **R$ 4,6 bilhões**. Esse número é uma medida de **originação**, não de perda:
+não representa saldo inadimplido nem prejuízo esperado, e ignora subordinação,
+garantias e coobrigação (ver §10 da lista de não-fazeres).
+
+Maiores exposições com situação de RJ/recuperação extrajudicial documentada:
+Grupo Casas Bahia (R$ 1,10 bi — recuperação **extra**judicial homologada em
+19/06/2024), Paranapanema (R$ 686 mi), Cia. Açucareira Paraíso (R$ 625 mi),
+Nassau Administração e Participações / Grupo João Santos (R$ 462 mi), Mendo
+Sampaio (R$ 361 mi), Cervejaria Petrópolis (R$ 193 mi) e Estok/Tok&Stok
+(R$ 149 mi). Aparecem ainda, com exposição menor, Oi S.A., InterCement Brasil,
+AgroGalaxy, Root Brasil, Casa & Vídeo, Cruzeiro E.C., Botafogo SAF e a Massa
+Falida do Banco BVA.
+
+Dois casos merecem nota metodológica:
+
+- **AgroGalaxy** figura como cedente nas competências de **maio e junho de 2026**,
+  isto é, **cedendo recebíveis já em recuperação judicial** (pedido em 09/2024) —
+  exatamente a hipótese que a Resolução CVM 240/2026 passou a acomodar. Não há
+  nada de irregular nisso; é o desenho previsto na norma.
+- **Grupo Casas Bahia** e **Oncoclínicas** estão em recuperação **extra**judicial,
+  que não gera o sufixo do art. 69. Foram capturados pela curadoria, não pelo
+  cadastro — ilustrando por que as duas trilhas são necessárias.
+
+**Cedentes do ranking (top 40) em situação de RJ.** Entre os **40 maiores**
+cedentes por exposição há **um único** caso documentado: **Grupo Casas Bahia**
+(27º, R$ 1,10 bi), e em recuperação **extra**judicial, não judicial. O primeiro
+cedente em recuperação **judicial** propriamente dita é **Paranapanema**, na 41ª
+posição, seguido da **Cia. Açucareira Paraíso**, na 46ª. Os demais do topo são
+instituições financeiras, montadoras e grandes indústrias sem processo de
+insolvência conhecido.
+
+A concentração de RJ está, portanto, na **cauda** do ranking, não no topo: apenas
+3 dos vínculos estão entre os 50 maiores cedentes, e esses 3 concentram
+R$ 2,4 bi dos R$ 4,6 bi. Os 86 casos detectados apenas pelo marcador cadastral
+(sem curadoria) somam **R$ 1,06 bi** — cauda longa de empresas pequenas e médias,
+diante dos R$ 55 bi do maior cedente isolado da base. Isso é o esperado: os maiores cedentes de
+FIDC são bancos, financeiras, instituições de pagamento e montadoras, categorias
+que não usam o instituto da recuperação judicial (instituições financeiras estão
+expressamente excluídas pelo art. 2º, II, da Lei 11.101/2005, sujeitando-se a
+regimes próprios do Banco Central).
+
+---
+
+## 11. O que este módulo deliberadamente não faz
 
 - **Não** casa empresa e cedente por semelhança de nome.
 - **Não** classifica crédito como concursal ou extraconcursal (ver §6.3).
@@ -378,7 +437,7 @@ logou o erro e seguiu.
 
 ---
 
-## 11. Base legal e normativa citada
+## 12. Base legal e normativa citada
 
 - Lei 11.101/2005, arts. 6º, §4º; 7º, §2º; 8º; 18; 47; 49 *caput* e §3º; 51; 52;
   56; 58; 63; 67; 69; 73; 83; 94; 161 e seguintes.

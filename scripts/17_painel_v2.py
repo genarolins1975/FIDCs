@@ -368,6 +368,9 @@ def main() -> int:
   concursal ou extraconcursal depende do contrato e da data do fato gerador (Lei 11.101/2005,
   art. 49 e §3º), nunca do nome do credor. Casamento de entidades feito por CNPJ; correspondência
   por nome é sinalizada como pendente de validação humana.</div>
+  <div class="tiles" id="tiles5"></div>
+  <div class="card" id="rjvinc"></div>
+  <h2>Casos com fonte pública citada</h2>
   <div class="card" id="rj"></div>
   <h2>Casos regulatórios e sancionadores</h2>
   <p class="note">Cada caso traz o estágio processual. Investigação, acusação, processo em curso,
@@ -480,15 +483,19 @@ drawLente();
 
 document.getElementById('tiles4').innerHTML =
   ['detido_fundos','emissor_ligado','sacado_cobertura_dc','sacado_mediana_top1',
-   'sacado_n_top1_50'].map(k=>tile(k)).join('');
+   'sacado_n_top1_50','rf_n_sinais','rf_atencao_alta','rf_nao_classificavel']
+   .map(k=>tile(k)).join('');
 renderTable('detentores','detentores',{bar:'vl_cotas_fidc'});
 document.getElementById('q4').addEventListener('input',e=>filterTables(e.target.value));
 renderTable('rf_score','rfscore');
 renderTable('rf_catalogo','rfcat');
 document.getElementById('rfnota').textContent = D.tabelas.rf_score && D.tabelas.rf_score.linhas.length
-  ? 'Score decomposto: risco, materialidade, cobertura e persistência aparecem lado a lado — nunca um número único. Metodologia experimental enquanto o backtest não validar os pesos.'
+  ? 'Score decomposto: risco, materialidade, cobertura e persistência aparecem lado a lado — nunca um número único. Falso positivo estrutural conhecido: fundos de crédito inadimplido (NPL), distressed e créditos judiciais disparam sinais de qualidade de ativo por desenho do próprio mandato, não por deterioração. Metodologia experimental — o backtest descartou dois sinais e não validou poder preditivo.'
   : 'Triagem em consolidação nesta versão.';
 
+document.getElementById('tiles5').innerHTML =
+  ['rj_vinculos','rj_exposicao','rj_casos','rj_processos'].map(k=>tile(k)).join('');
+renderTable('rj_vinculos','rjvinc',{bar:'exposicao_estimada'});
 renderTable('rj','rj');
 renderTable('casos','casos');
 document.getElementById('q5').addEventListener('input',e=>filterTables(e.target.value));
