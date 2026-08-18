@@ -23,14 +23,18 @@ veículo-mês).
 151 veículos administrados pela entidade na competência anterior ao evento;
 453 controles pareados.
 
-| Sinal | Positivos | Controles | **Lift** | Antecedência mediana | Cobertura |
-|---|---:|---:|---:|---:|---:|
-| S5 — estrutura fechada (cotistas de interesse único) | 95,4% | 21,2% | **4,50** | 4 meses | 100% |
-| S3 — subordinação abaixo de 5% | 83,3% | 32,2% | **2,59** | 0 mês | 99% |
-| S1 — inadimplência ≈ zero com cedente concentrado | 27,6% | 15,5% | **1,77** | 2 meses | 38% |
-| S4 — variação abrupta de patrimônio | 42,3% | 35,9% | 1,18 | 8 meses | 99% |
-| S6 — cedente único acima de 80% | 30,5% | 44,7% | **0,68** | 1 mês | 39% |
-| S2 — rolagem (recompra + substituição) | 0,0% | 7,0% | **0,00** | — | 87% |
+| Sinal | Positivos | Controles | **Lift** | **Fisher (p)** | Não avaliáveis | Antecedência mediana |
+|---|---:|---:|---:|---:|---:|---:|
+| S5 — estrutura fechada (cotistas de interesse único) | 95,4% | 21,2% | **4,50** | **< 0,0001** | 0 | 4 meses |
+| S3 — subordinação abaixo de 5% | 83,3% | 32,2% | **2,94** | **< 0,0001** | 1 | 0 mês |
+| S1 — inadimplência ≈ zero com cedente concentrado | 27,6% | 15,5% | **1,77** | **0,033** | 93 | 2 meses |
+| S4 — variação abrupta de patrimônio | 42,3% | 35,9% | 1,18 | 0,098 | 2 | 8 meses |
+| S6 — cedente único acima de 80% | 30,5% | 44,7% | **0,68** | 0,984 | 92 | 1 mês |
+| S2 — rolagem (recompra + substituição) | 0,0% | 7,0% | **0,00** | 1,000 | 19 | — |
+
+O p é de um teste exato de Fisher unilateral na direção esperada (positivos
+disparam mais que controles). "Não avaliáveis" são veículos sem o dado
+necessário — contados à parte, jamais somados aos que não dispararam.
 
 ## Leitura honesta destes números
 
@@ -52,6 +56,15 @@ veículo-mês).
   mecanismo clássico de ocultação de atraso, não aparece neste caso — o que é
   coerente com o fato de o evento ter sido de natureza societária e de conduta
   do prestador, não de deterioração de carteira.
+- **Significância**: apenas S5, S3 (p < 0,0001) e S1 (p = 0,033) rejeitam a
+  hipótese de que positivos e controles disparam na mesma proporção. S4
+  (p = 0,098), S6 (p = 0,984) e S2 (p = 1,000) não rejeitam — e S6 e S2 apontam
+  na direção contrária. Publicar lift sem o p induziria a erro: um lift de 1,18
+  sobre 149 veículos não é distinguível de ruído.
+- **Cobertura desigual entre sinais**: S1 e S6 só foram avaliáveis para ~38% dos
+  veículos (dependem de cedente declarado), enquanto S5 cobre 100%. Comparar
+  taxas de disparo entre sinais com coberturas tão distintas é ilegítimo — cada
+  taxa vale apenas contra o seu próprio grupo de controle.
 - **S1 é o único sinal com lastro documental externo**: no PAS CVM
   19957.006858/2019-25, a própria defesa atribuiu ao "reduzidíssimo histórico de
   inadimplências" a demora na detecção. O lift de 1,77 é modesto, mas a
@@ -59,9 +72,11 @@ veículo-mês).
 
 ## Falso negativo documentado — CR024: stop order (CVM, 20/05/2026)
 
-Três veículos vinculados. **Nenhum sinal disparou em nenhum mês da janela.**
-O painel não teria antecipado esse evento. Registrado deliberadamente: um
-backtest que só mostra acertos não é backtest.
+Três veículos vinculados. Dos seis sinais, **quatro foram avaliáveis e nenhum
+disparou**; dois (S1 e S6) ficaram **não avaliáveis** por ausência de cedente
+declarado — e "não avaliável" não é "não disparou". O painel não teria
+antecipado esse evento. Registrado deliberadamente: um backtest que só mostra
+acertos não é backtest.
 
 ## Caso não testável — CR022: liquidação de banco (BCB, 18/11/2025)
 
@@ -89,8 +104,8 @@ CNPJ de prestador e vínculo societário documentado.
 ## Conclusão
 
 A metodologia permanece **EXPERIMENTAL**. O backtest não autoriza afirmar que os
-sinais preveem eventos. Autoriza três coisas: (i) descartar S6 e S2 como sinais
-isolados de risco no score agregado; (ii) manter S5, S3 e S1 como indicadores
+sinais preveem eventos. Autoriza três coisas: (i) descartar S6, S2 e S4 como sinais
+isolados de risco no score agregado, por não atingirem significância; (ii) manter S5, S3 e S1 como indicadores
 descritivos de estrutura, com a advertência de que descrevem modelo de negócio;
 (iii) exigir que qualquer publicação de score venha acompanhada de cobertura,
 materialidade e força da evidência — nunca de um número único.

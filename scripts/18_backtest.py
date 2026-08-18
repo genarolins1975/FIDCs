@@ -92,8 +92,10 @@ def sinais_no_mes(con, cnpjs, comp):
            WHEN (coalesce(r.rec,0)+coalesce(r.subst,0))/(coalesce(b.dc_a,0)+coalesce(b.dc_b,0)) > 0.15
            THEN 1 ELSE 0 END AS S2,
       -- S3: subordinação baixa (só avaliável se houver séries informadas)
-      CASE WHEN s.v_tot IS NULL OR s.v_tot <= 0 THEN NULL
-           WHEN coalesce(s.v_sub,0)/s.v_tot < 0.05 THEN 1 ELSE 0 END AS S3,
+      -- v_sub nulo significa 'não informou séries subordinadas', não 'zero':
+      -- o sinal fica não avaliável, conforme a regra de nulos do projeto.
+      CASE WHEN s.v_tot IS NULL OR s.v_tot <= 0 OR s.v_sub IS NULL THEN NULL
+           WHEN s.v_sub/s.v_tot < 0.05 THEN 1 ELSE 0 END AS S3,
       -- S4: variação abrupta de PL no mês
       CASE WHEN an.pl_ant IS NULL OR an.pl_ant <= 0 THEN NULL
            WHEN abs(b.VL_PL/an.pl_ant - 1) > 0.30 THEN 1 ELSE 0 END AS S4,
@@ -173,14 +175,31 @@ def main() -> int:
                 # veículo conta como "disparou" se acendeu em qualquer mês da janela
                 por_veic = aval.groupby("CNPJ")[s].max()
                 antec = (aval[aval[s] == 1].groupby("CNPJ").meses_antes.max())
+                n_total_grupo = g.CNPJ.nunique()
                 resumo.append(dict(
                     caso=ev["caso"], rotulo=ev["rotulo"], sinal=s, grupo=grupo,
                     n_veiculos=int(por_veic.size),
                     n_disparou=int(por_veic.sum()),
+                    # não avaliável ≠ não disparou: publicado em coluna própria
+                    n_nao_avaliavel=int(n_total_grupo - por_veic.size),
                     taxa_disparo=float(por_veic.mean()),
-                    cobertura=float(len(aval.CNPJ.unique()) / max(g.CNPJ.nunique(), 1)),
+                    cobertura=float(por_veic.size / max(n_total_grupo, 1)),
                     antecedencia_mediana_meses=(float(antec.median()) if len(antec) else None),
                 ))
+
+    # Significância do contraste positivo × controle, por sinal (Fisher exato).
+    # Sem isso, comparar taxas de disparo entre grupos pequenos induz a erro.
+    from math import comb
+
+    def fisher_p(a, b, c_, d):
+        """p unilateral de a/(a+b) > c_/(c_+d) na tabela 2x2."""
+        n = a + b + c_ + d
+        if min(a + b, c_ + d, a + c_, b + d) == 0:
+            return None
+        p = 0.0
+        for i in range(a, min(a + b, a + c_) + 1):
+            p += (comb(a + b, i) * comb(c_ + d, a + c_ - i)) / comb(n, a + c_)
+        return round(p, 4)
 
     det_all = pd.concat(linhas, ignore_index=True) if linhas else pd.DataFrame()
     det_all.to_csv(f"{OUT}/backtest_detalhe.csv", index=False)
@@ -191,11 +210,22 @@ def main() -> int:
                               values="taxa_disparo").reset_index()
         piv["lift"] = piv.get("positivo") / piv.get("controle").replace(0, pd.NA)
         res = res.merge(piv[["caso", "sinal", "lift"]], on=["caso", "sinal"], how="left")
+        pv = []
+        for (caso, sinal), grp in res.groupby(["caso", "sinal"]):
+            p_ = grp[grp.grupo == "positivo"]
+            c_ = grp[grp.grupo == "controle"]
+            if len(p_) and len(c_):
+                a = int(p_.n_disparou.iloc[0]); b = int(p_.n_veiculos.iloc[0]) - a
+                cc = int(c_.n_disparou.iloc[0]); d = int(c_.n_veiculos.iloc[0]) - cc
+                pv.append(dict(caso=caso, sinal=sinal, fisher_p=fisher_p(a, b, cc, d)))
+        if pv:
+            res = res.merge(pd.DataFrame(pv), on=["caso", "sinal"], how="left")
     res.to_csv(f"{OUT}/backtest_resumo.csv", index=False)
 
     if "sinal" in res.columns:
-        v = res[res.grupo == "positivo"][["caso", "sinal", "n_veiculos", "n_disparou",
-                                          "taxa_disparo", "antecedencia_mediana_meses", "lift"]]
+        cols = ["caso", "sinal", "n_veiculos", "n_disparou", "n_nao_avaliavel",
+                "taxa_disparo", "antecedencia_mediana_meses", "lift", "fisher_p"]
+        v = res[res.grupo == "positivo"][[c_ for c_ in cols if c_ in res.columns]]
         print(v.to_string(index=False))
     print(f"\ndetalhe: {len(det_all)} observações veículo-mês")
     con.close()

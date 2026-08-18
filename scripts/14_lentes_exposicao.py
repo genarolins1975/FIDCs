@@ -166,6 +166,14 @@ def main() -> int:
     JOIN s ON s.CNPJ=p.CNPJ
     LEFT JOIN dc ON dc.CNPJ=p.CNPJ
     WHERE p.DT_COMPTC='{CORTE}' ORDER BY s.maior_sacado DESC""").df()
+    # marca os casos em que a soma dos 25 maiores excede a carteira informada:
+    # a razão existe, mas não é interpretável como participação
+    sc = pd.read_csv(f"{OUT}/sacados_concentracao.csv", dtype={"CNPJ": str})
+    if "inconsistencia_viii_vs_i" in sc.columns:
+        flag = sc.set_index(sc.CNPJ.astype(str).str.zfill(14))["inconsistencia_viii_vs_i"]
+        l5["inconsistente_viii_vs_i"] = l5.cnpj.astype(str).str.zfill(14).map(flag).fillna(False)
+    else:
+        l5["inconsistente_viii_vs_i"] = False
     l5.to_csv(f"{OUT}/lente_5_sacados_concentracao.csv", index=False)
     cob5 = con.execute(f"""
       SELECT ROUND(100.0*COUNT(DISTINCT s.CNPJ)/(SELECT COUNT(*) FROM painel_saneado

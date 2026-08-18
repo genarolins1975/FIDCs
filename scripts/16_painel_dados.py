@@ -49,14 +49,43 @@ def ind(key, valor, unidade, rotulo, formula, fonte, campo, status,
                     data_base=CORTE, data_extracao=EXTRACAO)
 
 
+# Unidade declarada de cada coluna conhecida. Sem heurística de escala: o
+# renderizador NUNCA adivinha se 0,9 é 0,9% ou 90% (achado do espelho).
+UNIDADES = {
+    # moeda
+    "valor": "brl", "VL_PL": "brl", "vl_cotas_fidc": "brl", "exposicao_estimada": "brl",
+    "pl_identificado": "brl", "materialidade_soma_rs": "brl", "materialidade_max_rs": "brl",
+    "dc": "brl", "dc_sem_risco": "brl", "vl": "brl",
+    # fração 0-1
+    "participacao": "fracao", "pct_maior_sacado": "fracao", "pct_top5": "fracao",
+    "pct_top10": "fracao", "share_top1": "fracao", "share_top5": "fracao",
+    "cobertura_sobre_pl_mercado": "fracao", "subord": "fracao", "inad_pct": "fracao",
+    # percentual já em 0-100
+    "cobertura_pct": "pct100", "cobertura_dados_pct": "pct100",
+    "cobertura_universo_pct": "pct100", "pct_maior_cedente": "pct100",
+    # índice adimensional
+    "hhi": "indice", "score_risco": "indice", "persistencia_media_meses": "indice",
+    # inteiros
+    "n_veiculos": "int", "n_entidades": "int", "n_fundos": "int", "n_sinalizados": "int",
+    "n_fidcs_investidos": "int", "n_ligadas": "int", "lente": "int", "n_criticos": "int",
+    "n_altos": "int", "posicoes_cotistas": "int", "n_cedentes_declarados": "int",
+    "n_cot": "int",
+}
+
+
 def tabela(key, df, cols, rotulo, fonte, campo, nota=None, limite=25):
     if df is None or not len(df):
         TAB[key] = dict(rotulo=rotulo, fonte=fonte, campo=campo, nota=nota,
-                        colunas=[], linhas=[])
+                        colunas=[], unidades=[], linhas=[])
         return
     d = df[[c for c in cols if c in df.columns]].head(limite)
+    # CNPJ e documentos são identificadores: string sempre, nunca número
+    for c in d.columns:
+        if any(k in c.lower() for k in ("cnpj", "doc_", "cpf")):
+            d[c] = d[c].astype(str).str.replace(r"\.0$", "", regex=True).str.zfill(14)
     TAB[key] = dict(rotulo=rotulo, fonte=fonte, campo=campo, nota=nota,
                     colunas=list(d.columns),
+                    unidades=[UNIDADES.get(c, "auto") for c in d.columns],
                     linhas=json.loads(d.to_json(orient="values")))
 
 
@@ -124,8 +153,11 @@ def main() -> int:
     prov = read("provisoes_reducao.csv").iloc[0]
     ind("provisionamento", prov.razao_reducao_sobre_inadimplencia, "%",
         "Atraso coberto por provisão",
-        "(TAB_I2A11 + TAB_I2B11) ÷ parcelas inadimplentes", "CVM — Informe Mensal FIDC",
-        "tab I", "calculado", "Fato confirmado por fonte primária", 100.0, None, "C027")
+        "(TAB_I2A11 + TAB_I2B11) ÷ (TAB_V_B_VL_DIRCRED_INAD + TAB_VI_B_VL_DIRCRED_INAD)",
+        "CVM — Informe Mensal FIDC", "tabs I (numerador), V e VI (denominador)",
+        "calculado", "Fato confirmado por fonte primária", 100.0,
+        "Numerador e denominador vêm de tabelas distintas: a redução ao valor recuperável "
+        "está na tab I; as parcelas inadimplentes, nas tabs V e VI.", "C027")
 
     sub = read("subordinacao_agregada.csv")
     tot_s = sub.valor.sum()
@@ -217,14 +249,23 @@ def main() -> int:
            "campos de cedente (top-9 por veículo)",
            "Estoque atribuído ≠ fluxo cedido. Piso: cobre 29,4% do estoque.")
     l5 = read("lente_5_sacados_concentracao.csv")
+    n_incons = 0
     if l5 is not None:
-        l5 = l5.sort_values("pct_maior_sacado", ascending=False)
+        if "inconsistente_viii_vs_i" in l5.columns:
+            n_incons = int(l5.inconsistente_viii_vs_i.fillna(False).astype(bool).sum())
+            # razão > 1 não é participação: a soma dos 25 maiores excede a carteira
+            # informada na tab I. Ficam fora do ranking e são contados à parte.
+            l5 = l5[~l5.inconsistente_viii_vs_i.fillna(False).astype(bool)]
         l5 = l5[l5.pct_maior_sacado.notna() & (l5.VL_PL > 1e8)]
+        l5 = l5.sort_values("pct_maior_sacado", ascending=False)
     tabela("lente5", l5,
            ["entidade", "VL_PL", "pct_maior_sacado", "pct_top5", "pct_top10"],
            "Concentração por devedor (tab VIII)", "CVM — tab VIII",
            "SEQUENCIAL + VALOR",
-           "A tabela VIII NÃO identifica o devedor. Só concentração, nunca identidade.")
+           "A tabela VIII NÃO identifica o devedor: só concentração, nunca identidade. "
+           f"Excluídos {n_incons} veículos em que a soma dos 25 maiores devedores excede a "
+           "carteira informada na tab I — a razão existe, mas não é interpretável como "
+           "participação, e a divergência entre tabelas é publicada como achado.")
     tabela("lente8", read("lente_8_exposicao_operacional.csv"),
            ["papel", "n_entidades", "hhi", "share_top1", "share_top5",
             "cobertura_sobre_pl_mercado"],
@@ -295,7 +336,8 @@ def main() -> int:
             "Cobertura insuficiente NUNCA é lida como baixo risco.", None)
         ind("rf_atencao_alta", int(vc.get("atenção alta", 0)), "un",
             "Veículos na faixa de atenção alta",
-            "score ≥ p99 da distribuição do próprio mercado",
+            "score ≥ p99 da distribuição entre os veículos CLASSIFICÁVEIS "
+            "(cobertura ≥ 50%), não do universo completo",
             "metodologia própria sobre informe CVM", "rf2_score_veiculo.csv",
             "calculado", "Indicador calculado", None,
             "Faixa estatística, não imputação. Fundos de NPL e distressed disparam por desenho.",
@@ -350,14 +392,19 @@ def main() -> int:
     # red flags v2 (se disponível) — senão, v1
     rf2, rfcat = rf2s, rf2c
     if rf2 is not None and rfcat is not None:
-        tabela("rf_score", rf2.sort_values("score_risco", ascending=False),
+        rf2_class = rf2[rf2.classificacao != "não classificável"]
+        tabela("rf_score", rf2_class.sort_values("score_risco", ascending=False),
                [c_ for c_ in ["DENOM_SOCIAL", "VL_PL", "score_risco", "classificacao",
                               "materialidade_soma_rs", "cobertura_dados_pct",
                               "persistencia_media_meses", "n_criticos", "n_altos"]
                 if c_ in rf2.columns],
                "Score de risco por veículo (experimental)",
                "CVM — informe mensal", "múltiplos campos",
-               "Score alto NÃO é imputação de irregularidade. Cobertura < 50% ⇒ não classificável.")
+               "Apenas veículos CLASSIFICÁVEIS (cobertura ≥ 50%), ordenados por score. "
+               "Score alto NÃO é imputação de irregularidade: fundos de crédito inadimplido, "
+               "distressed e créditos judiciais disparam sinais de qualidade de ativo por "
+               "desenho do mandato. Os não classificáveis ficam fora desta tabela e são "
+               "contados no cartão próprio — nunca são lidos como baixo risco.")
         tabela("rf_catalogo", rfcat,
                [c_ for c_ in ["sinal_id", "pilar", "nome", "severidade", "limiar",
                               "limiar_origem", "cobertura_universo_pct",
@@ -388,9 +435,24 @@ def main() -> int:
                limite=30)
 
     casos = read("casos_regulatorios.csv")
+    if casos is not None and len(casos):
+        # Pessoas naturais: cargo + entidade + processo + data permitem reidentificação
+        # trivial em consulta pública. No painel elas entram agregadas por caso,
+        # sem cargo nem vínculo específico (recomendação do manual jurídico).
+        pf = casos.entidade_principal.str.contains("pessoa natural", case=False, na=False)
+        if pf.any():
+            agreg = (casos[pf].groupby(["tipo_evento", "data_evento", "status_processual"],
+                                       as_index=False)
+                     .agg(entidade_principal=("entidade_principal", lambda x:
+                          f"{len(x)} pessoa(s) natural(is) acusada(s) — identificação "
+                          "suprimida nesta apresentação; consulte a fonte oficial"),
+                          papel=("papel", lambda x: "; ".join(sorted(set(x)))),
+                          nivel_evidencia=("nivel_evidencia", "first"),
+                          fonte_url=("fonte_url", "first")))
+            casos = pd.concat([casos[~pf], agreg], ignore_index=True)
     tabela("casos", casos,
            [c_ for c_ in ["entidade_principal", "papel", "tipo_evento", "data_evento",
-                          "descricao_irregularidade", "status_processual", "nivel_evidencia"]
+                          "status_processual", "nivel_evidencia", "fonte_url"]
             if casos is not None and c_ in casos.columns],
            "Casos regulatórios e sancionadores", "CVM, BCB e fontes oficiais",
            "processos e decisões",

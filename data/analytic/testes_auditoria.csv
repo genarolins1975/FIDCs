@@ -16,4 +16,4 @@ T12 veículos com alienações a cedentes/prestadores (12m),"22 veículos, R$ 2.
 T13 arquivos-fonte existentes,37/37,PASS,
 T13b integridade SHA-256 (amostra 5),5/5 ok,PASS,
 T14 PL CVM x ANBIMA jun/2026,+17.2% vs ANBIMA,WARN,"perímetros distintos: universo CVM inclui FIC-FIDC e veículos fora da cobertura ANBIMA; divergência analisada no relatório, seção Limitações"
-T15 soma das séries de cotas (X_2) x PL (tab IV),dif 0.04%,PASS,difere por veículos sem X_2 e defasagem de marcação
+T15 soma das séries de cotas (X_2) x PL (tab IV),dif 0.04%,PASS,"0 veículos sem X_2 no corte; a diferença residual vem de defasagem de marcação entre o valor da cota e o PL contábil, não de cobertura"

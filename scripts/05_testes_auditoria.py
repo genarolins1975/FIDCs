@@ -190,9 +190,14 @@ def main() -> int:
     sub = pd.read_csv(f"{OUT}/subordinacao_agregada.csv")
     tot_series = sub["valor"].sum()
     diff = abs(tot_series / pl_db - 1)
+    n_sem_x2 = con.execute(f"""
+      SELECT COUNT(*) FROM painel_t p WHERE p.DT_COMPTC='{CORTE}'
+        AND NOT EXISTS (SELECT 1 FROM series_cotas s
+                        WHERE s.CNPJ=p.CNPJ AND s.DT_COMPTC='{CORTE}')""").fetchone()[0]
     add("T15 soma das séries de cotas (X_2) x PL (tab IV)", f"dif {diff:.2%}",
         "PASS" if diff < 0.01 else "WARN",
-        "difere por veículos sem X_2 e defasagem de marcação")
+        f"{n_sem_x2} veículos sem X_2 no corte; a diferença residual vem de defasagem "
+        "de marcação entre o valor da cota e o PL contábil, não de cobertura")
 
     pd.DataFrame(results).to_csv(f"{OUT}/testes_auditoria.csv", index=False)
     n_fail = sum(1 for r in results if r["status"] == "FAIL")

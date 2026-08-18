@@ -119,7 +119,7 @@ dialog dd{margin:0;word-break:break-word}
 dialog .close{background:none;border:none;color:var(--ink2);font-size:22px;cursor:pointer;
   line-height:1;padding:0 2px}
 footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);
-  color:var(--muted);font-size:12.5px;max-width:88ch}
+  color:var(--ink2);font-size:12.5px;max-width:88ch}
 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
 @media (prefers-reduced-motion:no-preference){.bar>i{transition:width .45s ease}}
 """
@@ -176,18 +176,19 @@ function openEv(key){
 }
 // tabelas
 function isNum(v){ return typeof v === 'number' && isFinite(v); }
-function cellFmt(col, v){
+// A unidade de cada coluna é DECLARADA no JSON. Nunca inferida da magnitude:
+// adivinhar escala produziu erro de 100x na versão anterior.
+function cellFmt(col, v, unidade){
   if(v===null||v===undefined||v==='') return '—';
   if(!isNum(v)) return String(v);
-  const c = col.toLowerCase();
-  if(c.includes('valor')||c.includes('_pl')||c.includes('vl_')||c.includes('exposicao')
-     ||c.includes('materialidade')||c.includes('cotas_fidc')) return fmtVal(v,'R$');
-  if(c.includes('pct')||c.includes('participacao')||c.includes('share')||c.includes('cobertura')
-     ||c.includes('_pc')) {
-    return (Math.abs(v)<=1.5 ? nf.format(+(v*100).toFixed(1)) : nf.format(+v.toFixed(1)))+'%';
+  switch(unidade){
+    case 'brl':   return fmtVal(v,'R$');
+    case 'fracao':return nf.format(+(v*100).toFixed(1))+'%';
+    case 'pct100':return nf.format(+v.toFixed(1))+'%';
+    case 'indice':return nf.format(+v.toFixed(4));
+    case 'int':   return nf.format(Math.round(v));
+    default:      return nf.format(+v.toFixed(2));
   }
-  if(c==='hhi') return v.toFixed(4);
-  return nf.format(+v.toFixed(2));
 }
 function renderTable(key, mount, opts){
   const t = D.tabelas[key]; const el = document.getElementById(mount);
@@ -195,14 +196,15 @@ function renderTable(key, mount, opts){
   const o = opts||{}; const barCol = o.bar ? t.colunas.indexOf(o.bar) : -1;
   let max = 1;
   if(barCol>=0) max = Math.max(...t.linhas.map(r=>isNum(r[barCol])?r[barCol]:0)) || 1;
-  const head = t.colunas.map(c=>`<th class="${o.numCols&&o.numCols.includes(c)?'num':''}">${c.replace(/_/g,' ')}</th>`).join('');
+  const un = t.unidades || t.colunas.map(()=> 'auto');
+  const head = t.colunas.map((c,i)=>`<th class="${['brl','fracao','pct100','indice','int'].includes(un[i])?'num':''}">${c.replace(/_/g,' ')}</th>`).join('');
   const body = t.linhas.map(r=>{
     const tds = r.map((v,ix)=>{
-      const col = t.colunas[ix];
+      const col = t.colunas[ix], u = un[ix];
       if(ix===barCol && isNum(v)){
-        return `<td class="num">${cellFmt(col,v)}<div class="bar"><i style="width:${Math.max(2,100*v/max)}%"></i></div></td>`;
+        return `<td class="num">${cellFmt(col,v,u)}<div class="bar"><i style="width:${Math.max(2,100*v/max)}%"></i></div></td>`;
       }
-      return `<td class="${isNum(v)?'num':''}">${cellFmt(col,v)}</td>`;
+      return `<td class="${isNum(v)&&u!=='auto'?'num':''}">${cellFmt(col,v,u)}</td>`;
     }).join('');
     return `<tr data-row="${r.join(' ').toLowerCase()}">${tds}</tr>`;
   }).join('');
@@ -218,7 +220,9 @@ function filterTables(q){
 }
 function copyTable(key){
   const t = D.tabelas[key]; if(!t) return;
-  const csv = [t.colunas.join(';')].concat(t.linhas.map(r=>r.map(v=>v===null?'':v).join(';'))).join('\n');
+  const csv = [t.colunas.join(';')]
+    .concat(['# unidades: '+(t.unidades||[]).join(';')])
+    .concat(t.linhas.map(r=>r.map(v=>v===null?'':v).join(';'))).join('\n');
   navigator.clipboard.writeText(csv).then(()=>{
     const b = document.querySelector(`[data-copy="${key}"]`);
     if(b){ const o=b.textContent; b.textContent='copiado'; setTimeout(()=>b.textContent=o,1400); }
@@ -240,9 +244,8 @@ document.addEventListener('click', e=>{
   if(e.target.id==='evclose'){ document.getElementById('evd').close(); }
 });
 document.addEventListener('keydown', e=>{
-  if(e.key==='Enter' && e.target.classList && e.target.classList.contains('ev')){
-    openEv(e.target.dataset.ev);
-  }
+  const el = e.target.closest ? e.target.closest('[data-ev]') : null;
+  if((e.key==='Enter' || e.key===' ') && el){ e.preventDefault(); openEv(el.dataset.ev); }
 });
 """
 
