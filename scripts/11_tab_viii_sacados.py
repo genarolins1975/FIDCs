@@ -252,9 +252,9 @@ def main() -> int:
             resumo_rows.append({"metrica": f"{rot}_{nome}", "valor": q(col, p),
                                 "unidade": "fração" if rot != "hhi_parcial_piso" else "índice",
                                 "observacao": f"distribuição entre os {len(v)} veículos com razão definida"})
-        resumo_rows.append({"metrica": f"{rot}_media", "valor": float(v[col].mean()),
-                            "unidade": "fração" if rot != "hhi_parcial_piso" else "índice",
-                            "observacao": "média simples entre veículos"})
+        # NÃO se publica média sobre o conjunto completo: os veículos com
+        # inconsistência tab VIII x tab I produzem razões de ordem 1e9 e
+        # contaminam qualquer momento não-robusto. Média só no reconciliado.
     for lim in (0.20, 0.50, 0.80, 1.00):
         for col, rot in (("top1_sobre_dc", "top1"), ("top5_sobre_dc", "top5"),
                          ("top10_sobre_dc", "top10")):
@@ -297,6 +297,15 @@ def main() -> int:
                 "valor": float(vc[col].quantile(p)),
                 "unidade": "fração" if rot != "hhi_parcial_piso" else "índice",
                 "observacao": f"entre os {len(vc)} veículos reconciliados"})
+        resumo_rows.append({
+            "metrica": f"{rot}_media_reconciliado", "valor": float(vc[col].mean()),
+            "unidade": "fração" if rot != "hhi_parcial_piso" else "índice",
+            "observacao": "média simples; só faz sentido no subconjunto reconciliado"})
+        resumo_rows.append({
+            "metrica": f"{rot}_ponderado_por_dc_reconciliado",
+            "valor": float((vc[col] * vc.dc_total).sum() / vc.dc_total.sum()),
+            "unidade": "fração" if rot != "hhi_parcial_piso" else "índice",
+            "observacao": "média ponderada pelo DC do veículo"})
     for lim in (0.20, 0.50, 0.80):
         n = int((vc.top1_sobre_dc > lim).sum())
         resumo_rows.append({
@@ -307,6 +316,9 @@ def main() -> int:
     resumo.to_csv(f"{OUT}/sacados_concentracao_resumo.csv", index=False)
 
     # ------------------------------------------------------------------
+    print("\ncobertura da tab VIII ao longo do tempo (% do DC do painel):")
+    print(cob_serie[["DT_COMPTC", "n_veiculos_painel", "n_veiculos_com_tab_viii",
+                     "pct_veiculos", "pct_dc_coberto"]].round(3).to_string(index=False))
     print(f"\ncobertura tab VIII no corte {CORTE}:")
     print(f"  veículos do painel: {int(linha_cob.n_veiculos_painel):,}; "
           f"com tab VIII: {int(linha_cob.n_veiculos_com_tab_viii):,} "

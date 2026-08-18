@@ -14,27 +14,22 @@ top1_mediana,0.1790424068315873,fração,distribuição entre os 2706 veículos 
 top1_p75,0.7348629197880171,fração,distribuição entre os 2706 veículos com razão definida
 top1_p90,1.0,fração,distribuição entre os 2706 veículos com razão definida
 top1_p99,7.313956807922771,fração,distribuição entre os 2706 veículos com razão definida
-top1_media,1510065.663845247,fração,média simples entre veículos
 top5_mediana,0.4849585941236685,fração,distribuição entre os 2706 veículos com razão definida
 top5_p75,1.0,fração,distribuição entre os 2706 veículos com razão definida
 top5_p90,1.0013359062359406,fração,distribuição entre os 2706 veículos com razão definida
 top5_p99,11.519464899049854,fração,distribuição entre os 2706 veículos com razão definida
-top5_media,2838808.6284781937,fração,média simples entre veículos
 top10_mediana,0.6393843750271638,fração,distribuição entre os 2706 veículos com razão definida
 top10_p75,1.0,fração,distribuição entre os 2706 veículos com razão definida
 top10_p90,1.029646570504602,fração,distribuição entre os 2706 veículos com razão definida
 top10_p99,13.212468579822447,fração,distribuição entre os 2706 veículos com razão definida
-top10_media,3957896.9424523674,fração,média simples entre veículos
 top25_mediana,0.8355114456695854,fração,distribuição entre os 2706 veículos com razão definida
 top25_p75,1.0,fração,distribuição entre os 2706 veículos com razão definida
 top25_p90,1.0860578729739454,fração,distribuição entre os 2706 veículos com razão definida
 top25_p99,19.193686182064454,fração,distribuição entre os 2706 veículos com razão definida
-top25_media,4927659.644261606,fração,média simples entre veículos
 hhi_parcial_piso_mediana,0.0782079734276168,índice,distribuição entre os 2706 veículos com razão definida
 hhi_parcial_piso_p75,0.6114235647234483,índice,distribuição entre os 2706 veículos com razão definida
 hhi_parcial_piso_p90,1.0,índice,distribuição entre os 2706 veículos com razão definida
 hhi_parcial_piso_p99,75.54740127833787,índice,distribuição entre os 2706 veículos com razão definida
-hhi_parcial_piso_media,3999074651132729.5,índice,média simples entre veículos
 n_veiculos_top1_acima_20pct,1319,veículos,48.7% dos 2706 com razão definida
 n_veiculos_top5_acima_20pct,1733,veículos,64.0% dos 2706 com razão definida
 n_veiculos_top10_acima_20pct,1904,veículos,70.4% dos 2706 com razão definida
@@ -57,18 +52,28 @@ n_veiculos_reconciliados,2399,veículos,"base das estatísticas '_reconciliado' 
 top1_mediana_reconciliado,0.11586090703185883,fração,entre os 2399 veículos reconciliados
 top1_p75_reconciliado,0.587600957689651,fração,entre os 2399 veículos reconciliados
 top1_p90_reconciliado,1.0,fração,entre os 2399 veículos reconciliados
+top1_media_reconciliado,0.3192736957439642,fração,média simples; só faz sentido no subconjunto reconciliado
+top1_ponderado_por_dc_reconciliado,0.31187556373855296,fração,média ponderada pelo DC do veículo
 top5_mediana_reconciliado,0.34680810655096145,fração,entre os 2399 veículos reconciliados
 top5_p75_reconciliado,0.990323851477824,fração,entre os 2399 veículos reconciliados
 top5_p90_reconciliado,1.0,fração,entre os 2399 veículos reconciliados
+top5_media_reconciliado,0.4653418031540548,fração,média simples; só faz sentido no subconjunto reconciliado
+top5_ponderado_por_dc_reconciliado,0.414710777522318,fração,média ponderada pelo DC do veículo
 top10_mediana_reconciliado,0.4855087833918396,fração,entre os 2399 veículos reconciliados
 top10_p75_reconciliado,1.0,fração,entre os 2399 veículos reconciliados
 top10_p90_reconciliado,1.0,fração,entre os 2399 veículos reconciliados
+top10_media_reconciliado,0.5176238370644033,fração,média simples; só faz sentido no subconjunto reconciliado
+top10_ponderado_por_dc_reconciliado,0.4542335178757331,fração,média ponderada pelo DC do veículo
 top25_mediana_reconciliado,0.6944600267481663,fração,entre os 2399 veículos reconciliados
 top25_p75_reconciliado,1.0,fração,entre os 2399 veículos reconciliados
 top25_p90_reconciliado,1.0000000000000002,fração,entre os 2399 veículos reconciliados
+top25_media_reconciliado,0.5818577983070441,fração,média simples; só faz sentido no subconjunto reconciliado
+top25_ponderado_por_dc_reconciliado,0.5034976905248045,fração,média ponderada pelo DC do veículo
 hhi_parcial_piso_mediana_reconciliado,0.04106041257030769,índice,entre os 2399 veículos reconciliados
 hhi_parcial_piso_p75_reconciliado,0.4773564904783772,índice,entre os 2399 veículos reconciliados
 hhi_parcial_piso_p90_reconciliado,1.0,índice,entre os 2399 veículos reconciliados
+hhi_parcial_piso_media_reconciliado,0.2697078088720776,índice,média simples; só faz sentido no subconjunto reconciliado
+hhi_parcial_piso_ponderado_por_dc_reconciliado,0.2812364972523726,índice,média ponderada pelo DC do veículo
 n_veiculos_top1_acima_20pct_reconciliado,1036,veículos,43.2% dos 2399 reconciliados
 n_veiculos_top1_acima_50pct_reconciliado,671,veículos,28.0% dos 2399 reconciliados
 n_veiculos_top1_acima_80pct_reconciliado,468,veículos,19.5% dos 2399 reconciliados

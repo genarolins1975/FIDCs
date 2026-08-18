@@ -82,11 +82,15 @@ def main() -> int:
               key_extra=("TAB_X_CLASSE_SERIE",))
     con.execute("CREATE OR REPLACE TABLE desempenho AS SELECT * FROM x6")
 
+    # ---- tab III: passivo (habilita a identidade contábil Ativo - Passivo = PL) ----
+    iii = load("III", "TAB_III")
+    con.execute("CREATE OR REPLACE TABLE passivo AS SELECT * FROM iii")
+
     # ---- tab X_7: garantias ----
     x7 = load("X_7", "TAB_X")
     con.execute("CREATE OR REPLACE TABLE garantias AS SELECT * FROM x7")
 
-    for t in ("taxas", "desempenho", "garantias"):
+    for t in ("taxas", "desempenho", "garantias", "passivo"):
         con.execute(f"COPY {t} TO '{OUT}/{t}.parquet' (FORMAT PARQUET, COMPRESSION ZSTD)")
 
     # ---------- indicadores derivados, com cobertura explícita ----------
@@ -137,6 +141,20 @@ def main() -> int:
            COUNT(*) FILTER (TAB_X_VL_GARANTIA_DIRCRED > 0) n_com_garantia_positiva
     FROM garantias WHERE DT_COMPTC='{CORTE}'""").df()
     gar.to_csv(f"{OUT}/garantias_resumo.csv", index=False)
+
+    # Identidade contábil: Ativo - Passivo = PL (tolerância R$ 0,01)
+    ident = con.execute(f"""
+    SELECT COUNT(*) n_avaliaveis,
+           COUNT(*) FILTER (abs(a.TAB_I_VL_ATIVO - pv.TAB_III_VL_PASSIVO - p.VL_PL) > 0.01) n_divergentes,
+           ROUND(MAX(abs(a.TAB_I_VL_ATIVO - pv.TAB_III_VL_PASSIVO - p.VL_PL)),2) maior_divergencia
+    FROM painel_saneado p
+    JOIN ativo a ON a.CNPJ=p.CNPJ AND a.DT_COMPTC=p.DT_COMPTC
+    JOIN passivo pv ON pv.CNPJ=p.CNPJ AND pv.DT_COMPTC=p.DT_COMPTC
+    WHERE p.DT_COMPTC='{CORTE}' AND a.TAB_I_VL_ATIVO IS NOT NULL
+      AND pv.TAB_III_VL_PASSIVO IS NOT NULL""").df()
+    ident.to_csv(f"{OUT}/identidade_contabil.csv", index=False)
+    print("\nidentidade contábil Ativo-Passivo=PL:")
+    print(ident.to_string(index=False))
 
     print("\ntaxas (corte):")
     print(taxas_res.to_string(index=False))
