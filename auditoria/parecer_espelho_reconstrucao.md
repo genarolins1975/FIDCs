@@ -1235,3 +1235,80 @@ a circular com a ressalva 1 corrigida na próxima regeneração.
 
 *Terceira passada executada em 18/08/2026, 19:13–19:25 UTC, sobre `68d782a`.
 Recálculo e testes: `auditoria/espelho_reconstrucao_recalc.py` (seção 3ª passada).*
+
+---
+
+# R.9 — Verificação do fechamento das ressalvas (build `09ab150`, 18/08/2026)
+
+Verificação curta e final. HTML md5 `03428487…`, JSON md5 `0390ae02…`.
+Gate reexecutado por mim: **51/51 OK, exit 0**. Zero erro de console; 8 abas navegam.
+
+**Ressalva 1 (62,5% → 42,1% na lente 5) — FECHADA** (já em `e80b44e`). A nota
+publica **42,1%**, que é o valor que recalculei na 3ª passada; o gate agora extrai
+os três percentuais do texto da nota e os recomputa com
+`LEAST(...) FILTER (s.CNPJ IS NOT NULL)` — o ponto cego (número em texto de nota)
+foi coberto para as lentes 4 e 5.
+
+**Ressalva 2 (gate parcialmente circular) — FECHADA.** `painel_canonico_do_bruto()`
+existe e é, linha por linha, a mesma reimplementação independente que fiz na 1ª
+passada (tab IV bruta + registro classe/fundo, dedup próprio, sem DuckDB); cobre
+`pl_total`, `n_veiculos`, `inadimplencia` e `identidade_contabil` — exatamente os
+âncoras que pedi. A coluna `base` do `verificacao_formulas.csv` distingue
+`bruto` (4) × `intermediário` (47), e a aba Auditoria documenta a distinção **e**
+o delta HTML×JSON ("é, por desenho, o único conteúdo do HTML que não consta de
+painel_dados.json"). Conferido no cabeçalho do script, no CSV e na tela.
+
+**Ressalva 3 (backtest) — FECHADA.** Pareamento por veículo (mesmo
+`TP_FUNDO_CLASSE`, PL 0,5x–2x, até 3 por positivo) implementado; 416 controles em
+CR023. Recalculei o Fisher unilateral dos seis sinais contra o novo
+`backtest_resumo.csv`: **idêntico até a 4ª casa** (S1 p=0,0407; S4 p=0,1658; S6
+p=0,9982). A partição de significância é a mesma do desenho anterior e o MD
+registra a robustez com os lifts corretos (4,46/3,85/1,70/1,13/0,61/0,00). A
+descontaminação virou **invariante com `raise AssertionError`** antes da gravação
+— vale para ingestão futura, como pedi. Interseção positivos×controles: **0**
+(verificada). Varri a prosa do MD à caça de números da execução antiga (32,2 /
+2,59 / 2,94 / 447 / 453 / 0,033 / 1,18 / 1,77 / 0,68): **nenhum stale** — todos os
+números da prosa correspondem ao CSV corrente, incluindo o "~38%" de cobertura de
+S1/S6 (CSV: 38,4% / 39,1%). Pendência de pareamento por público-alvo/segmento
+corretamente reescrita como limitação, com a advertência certa sobre parear pelas
+variáveis-sinal.
+
+**Ressalva 4 (lente 4) — FECHADA.** A nota decompõe as três coberturas
+(38,2% / 44,7% / 29,4%) e o gate as recomputa (`lente4_coberturas_na_nota`,
+51/51). *Observação de redação, sem exigência:* a nota diz "declaram **ao menos um
+cedente**", mas a definição executada é "cedente com percentual **válido**
+(0 < PR ≤ 100)" — contando qualquer documento não vazio, o número seria ~44%.
+Vale explicitar "com percentual válido" na nota numa edição futura.
+
+**Ressalva 5 (cosméticos) — FECHADA.** Verificado no navegador: CNPJ mascarado
+(`60.398.369/0004-79`, `08.662.033/0001-09` — zero à esquerda preservado sob a
+máscara) nas tabelas, na ficha e no Raio-X; seletor da ficha lista **400/400**;
+iterei **as 60 empresas** do Raio-X por script e não encontrei literais
+`false`/`None`/`NaN`/`undefined` em nenhum caminho; `--warn` do tema claro é
+`#A05910` — medi contraste 4,84 / 5,11 / 5,34 sobre os três fundos, todos ≥ 4,5
+(AA). O tema escuro mantém `#C0762C`, correto para fundo escuro.
+
+## Notas finais (ajuste sobre R.8.4)
+
+Rastreabilidade **9 → 10** (âncoras do bruto dentro do gate + delta HTML×JSON
+documentado — não resta nada que eu tenha pedido); consistência conceitual
+**8 → 9** (decomposição das três coberturas nas duas lentes, verificada por gate;
+retém a observação de redação da lente 4); clareza **8 → 9** (máscara de CNPJ,
+literais eliminados, contraste AA). Demais dimensões inalteradas.
+**Média final: 9,0.**
+
+## Situação final
+
+# APROVADO COM RESSALVAS — todas as ressalvas de R.8 FECHADAS
+
+O que resta são pendências declaradas, não defeitos: a validação do backtest
+continua limitada a um evento robusto (limitação honesta e escrita no próprio MD);
+o pareamento por público-alvo/segmento é trabalho futuro; "sinais encerrados"
+depende da disciplina de snapshot entre edições; e a observação de redação da
+lente 4 acima. Nenhuma condiciona a publicação. O veredito de R.8.5 fica mantido
+com as ressalvas dadas por cumpridas — na prática, o mais próximo de uma aprovação
+plena que este auditor emite para um artefato vivo.
+
+*Verificação executada em 18/08/2026 sobre `09ab150`. Gate reexecutado
+independentemente (51/51); Fisher e coberturas recalculados; navegador varrido
+nas 8 abas e nas 60 fichas de empresa.*

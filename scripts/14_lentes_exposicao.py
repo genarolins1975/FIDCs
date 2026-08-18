@@ -159,7 +159,8 @@ def main() -> int:
           "CVM: informe mensal tab I (campos de cedente) + base pública do CNPJ",
           cob4_valor, len(l4),
           f"Três coberturas, três definições: {cob4_veic}% dos veículos do corte declaram ao "
-          f"menos um cedente; esses veículos carregam {cob4_dc}% do estoque de DC; os percentuais "
+          f"menos um cedente com percentual válido (0 < PR ≤ 100 — sem o filtro seriam ~44%); "
+          f"esses veículos carregam {cob4_dc}% do estoque de DC; os percentuais "
           f"declarados (top-9 por veículo) explicam {cob4_valor}% do estoque total de DC — a "
           "cauda além do top-9 não é observável. CPFs não resolvidos (contados, nunca nominados).")
 
