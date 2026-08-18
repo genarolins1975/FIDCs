@@ -10,7 +10,9 @@ Desenho:
     O vínculo é feito por CNPJ do prestador (administrador/gestor) ou do
     próprio fundo, nunca por semelhança de nome.
   - Controles negativos: veículos sem evento conhecido, pareados por faixa de
-    PL e competência, amostrados com semente fixa.
+    PL e competência, amostrados com semente fixa. Veículos positivos em
+    QUALQUER evento da biblioteca são excluídos de TODOS os pools de controle —
+    sem isso, um positivo de um evento contaminaria o controle de outro.
   - Anti-vazamento: para um evento em T, só se lê informação de competências
     ≤ T−1 mês. Nenhum sinal usa dado posterior ao evento.
   - Métricas: taxa de disparo em positivos (sensibilidade aparente), taxa em
@@ -121,15 +123,84 @@ def competencias_antes(con, data_evento, n):
         WHERE DT_COMPTC < '{mes_evento}' ORDER BY DT_COMPTC DESC LIMIT {n}""").fetchall()][::-1]
 
 
+SINAL_ROTULOS = {
+    "S1": "S1 — inadimplência ≈ zero com cedente concentrado",
+    "S2": "S2 — rolagem (recompra + substituição)",
+    "S3": "S3 — subordinação abaixo de 5%",
+    "S4": "S4 — variação abrupta de patrimônio",
+    "S5": "S5 — estrutura fechada (cotistas de interesse único)",
+    "S6": "S6 — cedente único acima de 80%",
+}
+
+
+def atualizar_md(res: pd.DataFrame) -> None:
+    """Regenera a tabela de CR023 no BACKTEST_RED_FLAGS.md entre marcadores.
+
+    Publica as DUAS colunas de antecedência (positivos E controles): em 5 dos
+    6 sinais os controles acendem antes — a coluna mede posição na janela de
+    12 meses, não antecipação do evento, e publicá-la só para os positivos
+    sugeriria o contrário.
+    """
+    md_path = os.path.join(ROOT, "BACKTEST_RED_FLAGS.md")
+    if "sinal" not in res.columns or not os.path.exists(md_path):
+        return
+    r23 = res[(res.caso == "CR023") & res.sinal.notna()]
+    if r23.empty:
+        return
+    ordem = (r23[r23.grupo == "positivo"].set_index("sinal").lift
+             .sort_values(ascending=False).index.tolist())
+    lin = ["| Sinal | Positivos | Controles | **Lift** | **Fisher (p)** | "
+           "Não avaliáveis | Antecedência positivos | Antecedência controles |",
+           "|---|---:|---:|---:|---:|---:|---:|---:|"]
+
+    def fm_pct(v):
+        return "—" if pd.isna(v) else f"{v*100:.1f}%".replace(".", ",")
+
+    def fm_m(v):
+        return "—" if pd.isna(v) else f"{v:.0f} m"
+
+    for s in ordem:
+        p = r23[(r23.sinal == s) & (r23.grupo == "positivo")].iloc[0]
+        c = r23[(r23.sinal == s) & (r23.grupo == "controle")].iloc[0]
+        pf = ("< 0,0001" if (p.fisher_p is not None and not pd.isna(p.fisher_p)
+                             and p.fisher_p < 1e-4)
+              else ("—" if pd.isna(p.fisher_p) else f"{p.fisher_p:.3f}".replace(".", ",")))
+        lift = "—" if pd.isna(p.lift) else f"{p.lift:.2f}".replace(".", ",")
+        lin.append(f"| {SINAL_ROTULOS.get(s, s)} | {fm_pct(p.taxa_disparo)} | "
+                   f"{fm_pct(c.taxa_disparo)} | **{lift}** | **{pf}** | "
+                   f"{int(p.n_nao_avaliavel) + int(c.n_nao_avaliavel)} | "
+                   f"{fm_m(p.antecedencia_mediana_meses)} | "
+                   f"{fm_m(c.antecedencia_mediana_meses)} |")
+    lin.append("")
+    lin.append("Leitura obrigatória da antecedência: em 5 dos 6 sinais **os controles "
+               "acendem mais cedo que os positivos** — a coluna mede em que ponto da "
+               "janela de 12 meses o sinal costuma aparecer, **não** antecipação do "
+               "evento. Nenhuma leitura preditiva é autorizada por ela.")
+    tabela = "\n".join(lin)
+    ini, fim = "<!-- BACKTEST:TABELA:INICIO -->", "<!-- BACKTEST:TABELA:FIM -->"
+    txt = open(md_path, encoding="utf-8").read()
+    if ini in txt and fim in txt:
+        pre, resto = txt.split(ini, 1)
+        _, pos = resto.split(fim, 1)
+        open(md_path, "w", encoding="utf-8").write(
+            pre + ini + "\n" + tabela + "\n" + fim + pos)
+        print("BACKTEST_RED_FLAGS.md: tabela regenerada a partir do CSV")
+
+
 def main() -> int:
     con = duckdb.connect(DB, read_only=True)
     SINAIS = ["S1", "S2", "S3", "S4", "S5", "S6"]
     linhas, resumo = [], []
 
+    # 1ª passada: positivos de cada evento. A união entra na lista de exclusão
+    # de TODOS os pools de controle (um positivo de CR023 não pode servir de
+    # controle "sem evento conhecido" para CR024).
+    alvos, comps_por_ev = {}, {}
     for ev in EVENTOS:
         comps = competencias_antes(con, ev["data"], JANELA)
         if not comps:
             continue
+        comps_por_ev[ev["caso"]] = comps
         ref = comps[-1]  # competência imediatamente anterior ao evento
         if ev["tipo"] == "admin":
             alvo = [r[0] for r in con.execute(f"""
@@ -141,18 +212,29 @@ def main() -> int:
             alvo = [r[0] for r in con.execute(f"""
                 SELECT DISTINCT CNPJ FROM painel_saneado
                 WHERE DT_COMPTC='{ref}' AND upper(DENOM_SOCIAL) LIKE '%{ev["padrao"]}%'""").fetchall()]
+        alvos[ev["caso"]] = alvo
+    positivos_todos = sorted({c for a in alvos.values() for c in a})
+
+    for ev in EVENTOS:
+        comps = comps_por_ev.get(ev["caso"])
+        if not comps:
+            continue
+        ref = comps[-1]
+        alvo = alvos.get(ev["caso"], [])
         if not alvo:
             resumo.append(dict(caso=ev["caso"], rotulo=ev["rotulo"], n_positivos=0,
                                observacao="nenhum veículo vinculado na competência anterior"))
             continue
 
         # controles negativos pareados por faixa de PL, sem evento conhecido
+        # (exclui positivos de QUALQUER evento, não só deste)
         ctrl = [r[0] for r in con.execute(f"""
             WITH faixa AS (
               SELECT MIN(VL_PL) lo, MAX(VL_PL) hi FROM painel_saneado
               WHERE DT_COMPTC='{ref}' AND CNPJ IN ('{"','".join(alvo)}'))
             SELECT p.CNPJ FROM painel_saneado p, faixa f
-            WHERE p.DT_COMPTC='{ref}' AND p.CNPJ NOT IN ('{"','".join(alvo)}')
+            WHERE p.DT_COMPTC='{ref}'
+              AND p.CNPJ NOT IN ('{"','".join(positivos_todos)}')
               AND p.VL_PL BETWEEN f.lo AND f.hi
             ORDER BY hash(p.CNPJ || '{ev["caso"]}') LIMIT {max(len(alvo)*3, 30)}""").fetchall()]
 
@@ -221,6 +303,10 @@ def main() -> int:
         if pv:
             res = res.merge(pd.DataFrame(pv), on=["caso", "sinal"], how="left")
     res.to_csv(f"{OUT}/backtest_resumo.csv", index=False)
+
+    # A tabela publicada no BACKTEST_RED_FLAGS.md é regenerada daqui, entre
+    # marcadores — o documento nunca pode divergir do CSV que o sustenta.
+    atualizar_md(res)
 
     if "sinal" in res.columns:
         cols = ["caso", "sinal", "n_veiculos", "n_disparou", "n_nao_avaliavel",

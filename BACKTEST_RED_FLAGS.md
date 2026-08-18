@@ -23,18 +23,32 @@ veículo-mês).
 151 veículos administrados pela entidade na competência anterior ao evento;
 453 controles pareados.
 
-| Sinal | Positivos | Controles | **Lift** | **Fisher (p)** | Não avaliáveis | Antecedência mediana |
-|---|---:|---:|---:|---:|---:|---:|
-| S5 — estrutura fechada (cotistas de interesse único) | 95,4% | 21,2% | **4,50** | **< 0,0001** | 0 | 4 meses |
-| S3 — subordinação abaixo de 5% | 83,3% | 32,2% | **2,94** | **< 0,0001** | 1 | 0 mês |
-| S1 — inadimplência ≈ zero com cedente concentrado | 27,6% | 15,5% | **1,77** | **0,033** | 93 | 2 meses |
-| S4 — variação abrupta de patrimônio | 42,3% | 35,9% | 1,18 | 0,098 | 2 | 8 meses |
-| S6 — cedente único acima de 80% | 30,5% | 44,7% | **0,68** | 0,984 | 92 | 1 mês |
-| S2 — rolagem (recompra + substituição) | 0,0% | 7,0% | **0,00** | 1,000 | 19 | — |
+<!-- BACKTEST:TABELA:INICIO -->
+| Sinal | Positivos | Controles | **Lift** | **Fisher (p)** | Não avaliáveis | Antecedência positivos | Antecedência controles |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| S5 — estrutura fechada (cotistas de interesse único) | 95,4% | 21,2% | **4,50** | **< 0,0001** | 0 | 4 m | 11 m |
+| S3 — subordinação abaixo de 5% | 83,3% | 28,4% | **2,94** | **< 0,0001** | 10 | 0 m | 5 m |
+| S1 — inadimplência ≈ zero com cedente concentrado | 27,6% | 15,5% | **1,77** | **0,033** | 353 | 2 m | 10 m |
+| S4 — variação abrupta de patrimônio | 42,3% | 35,9% | **1,18** | **0,098** | 23 | 8 m | 5 m |
+| S6 — cedente único acima de 80% | 30,5% | 44,7% | **0,68** | **0,984** | 326 | 1 m | 9 m |
+| S2 — rolagem (recompra + substituição) | 0,0% | 7,0% | **0,00** | **1,000** | 127 | — | 8 m |
 
-O p é de um teste exato de Fisher unilateral na direção esperada (positivos
-disparam mais que controles). "Não avaliáveis" são veículos sem o dado
-necessário — contados à parte, jamais somados aos que não dispararam.
+Leitura obrigatória da antecedência: em 5 dos 6 sinais **os controles acendem mais cedo que os positivos** — a coluna mede em que ponto da janela de 12 meses o sinal costuma aparecer, **não** antecipação do evento. Nenhuma leitura preditiva é autorizada por ela.
+<!-- BACKTEST:TABELA:FIM -->
+
+A tabela acima é **regenerada automaticamente** por `scripts/18_backtest.py` a
+partir de `backtest_resumo.csv` — o documento não pode divergir do CSV que o
+sustenta. O p é de um teste exato de Fisher unilateral na direção esperada
+(positivos disparam mais que controles). "Não avaliáveis" são veículos sem o
+dado necessário — contados à parte, jamais somados aos que não dispararam.
+As duas colunas de antecedência são publicadas juntas deliberadamente: em 5
+dos 6 sinais os controles acendem **antes** dos positivos, o que demonstra que
+a métrica descreve posição na janela de observação, não capacidade de
+antecipar o evento.
+
+Higiene do grupo de controle: veículos positivos em **qualquer** evento da
+biblioteca são excluídos de **todos** os pools de controle — sem isso, um
+positivo de um evento serviria de "controle sem evento conhecido" para outro.
 
 ## Leitura honesta destes números
 

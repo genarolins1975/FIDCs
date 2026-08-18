@@ -84,8 +84,10 @@ def main() -> int:
           "NÃO é capital próprio do gestor nem exposição econômica dele ao risco de crédito das carteiras; "
           "o gestor responde por decisão de investimento, não pelo risco do ativo.",
           "CVM: registro fundo/classe (gestor) + informe mensal tab IV",
-          round(100 * l1.valor.sum() / pl_total, 1), len(l1),
-          "Registro é fotografia atual: trocas de gestor não são rastreadas retroativamente.")
+          round(100 * l1.valor.sum() / pl_total, 2), len(l1),
+          "Registro é fotografia atual: trocas de gestor não são rastreadas retroativamente. "
+          "Cobertura publicada com 2 casas: arredondar para 100% esconderia os veículos "
+          "sem gestor identificado no registro.")
 
     # ---------- Lente 2: PL sob administração ----------
     l2 = con.execute(f"""
@@ -103,7 +105,7 @@ def main() -> int:
           "NÃO é exposição financeira do administrador: o patrimônio do fundo é segregado do "
           "patrimônio do prestador. Mede concentração OPERACIONAL, não risco de crédito.",
           "CVM: informe mensal tab I (CNPJ_ADMIN) + tab IV",
-          round(100 * l2.valor.sum() / pl_total, 1), len(l2),
+          round(100 * l2.valor.sum() / pl_total, 2), len(l2),
           "Autodeclarado no informe; mudanças de administrador aparecem com defasagem.")
 
     # ---------- Lente 3: exposição da carteira (direitos creditórios) ----------
@@ -175,10 +177,24 @@ def main() -> int:
     else:
         l5["inconsistente_viii_vs_i"] = False
     l5.to_csv(f"{OUT}/lente_5_sacados_concentracao.csv", index=False)
-    cob5 = con.execute(f"""
+    # Três coberturas distintas, cada uma com sua definição — publicá-las sem
+    # rótulo faria 69,3% e 79,7% parecerem contraditórias:
+    #   (a) veículos: % dos veículos do corte que reportam a tab VIII;
+    #   (b) DC dos cobertos: % do estoque de DC que está em veículos cobertos;
+    #   (c) valor explicado: % do estoque total de DC efetivamente listado
+    #       nas 25 posições (a cauda além do top-25 não é observável).
+    cob5, cob5_dc, cob5_valor = con.execute(f"""
+      WITH dc AS (SELECT a.CNPJ,
+             COALESCE(a.TAB_I2A_VL_DIRCRED_RISCO,0)+COALESCE(a.TAB_I2B_VL_DIRCRED_SEM_RISCO,0) v
+             FROM ativo a JOIN painel_saneado p ON p.CNPJ=a.CNPJ AND p.DT_COMPTC=a.DT_COMPTC
+             WHERE a.DT_COMPTC='{CORTE}'),
+      s AS (SELECT CNPJ, SUM(VALOR) top25 FROM sacados_conc
+            WHERE DT_COMPTC='{CORTE}' GROUP BY 1)
       SELECT ROUND(100.0*COUNT(DISTINCT s.CNPJ)/(SELECT COUNT(*) FROM painel_saneado
-             WHERE DT_COMPTC='{CORTE}'),1)
-      FROM sacados_conc s WHERE s.DT_COMPTC='{CORTE}'""").fetchone()[0]
+                   WHERE DT_COMPTC='{CORTE}'),1),
+             ROUND(100.0*SUM(dc.v) FILTER (s.CNPJ IS NOT NULL)/SUM(dc.v),1),
+             ROUND(100.0*SUM(LEAST(s.top25, dc.v))/SUM(dc.v),1)
+      FROM dc LEFT JOIN s ON s.CNPJ=dc.CNPJ""").fetchone()
     ficha(5, "Exposição a sacado/devedor (concentração)",
           "Valor devido pelos 25 maiores devedores de cada veículo e sua participação no estoque "
           "de direitos creditórios (tabela VIII do informe).",
@@ -187,8 +203,11 @@ def main() -> int:
           "A tabela VIII NÃO contém identificador do sacado. É IMPOSSÍVEL, com dados públicos, "
           "montar ranking nominal de devedores do mercado. Qualquer identificação seria inferência.",
           "CVM: informe mensal tab VIII", cob5, len(l5),
-          "Sem identidade do devedor; cobre os 25 maiores por veículo; veículos sem a tabela "
-          "ficam fora (não são zero).")
+          f"Três coberturas, três definições: {cob5}% dos veículos do corte reportam a tabela; "
+          f"esses veículos carregam {cob5_dc}% do estoque de DC; as posições listadas (top-25 "
+          f"por veículo) explicam {cob5_valor}% do estoque total de DC — a cauda além do top-25 "
+          "não é observável. Sem identidade do devedor; veículos sem a tabela ficam fora "
+          "(não são zero).")
 
     # ---------- Lente 6: exposição do cotista ----------
     l6 = con.execute(f"""

@@ -483,6 +483,32 @@ achado específico: **AgroGalaxy aparece cedendo recebíveis em maio e junho de
 240/2026 passou a acomodar, o que ilustra resposta a incentivo regulatório e não
 deterioração.
 
+## 13-C. Governança de publicação (rodada 3, 18/08/2026)
+
+Após a revalidação do auditor-espelho (média 7,5, três bloqueantes), o ciclo
+fechou com três mecanismos que mudam a natureza do controle — de correção
+pontual para **prevenção de classe**:
+
+- **Verificação automática de fórmulas** (`scripts/20_teste_formulas.py`): cada
+  indicador publicado é recomputado a partir dos arquivos de origem; divergência
+  acima de 0,1%, indicador sem verificador, condenação sem número de processo
+  visível ou reidentificação de pessoa natural por cargo+entidade **reprovam o
+  build**. 49/49 verificações aprovadas nesta edição.
+- **Orquestrador com gates** (`scripts/00_atualizar.py`): pipeline em ordem
+  única, manifesto de execução com hash por etapa, e a regra de que o painel não
+  é regenerado se os testes de auditoria ou a verificação de fórmulas falharem.
+  Snapshot de sinais versionado por execução — habilita o indicador "sinais
+  encerrados" a partir da próxima edição.
+- **Regra-mãe aplicada ponta a ponta**: cobertura insuficiente nunca é lida como
+  baixo risco — inclusive na ficha individual do veículo, onde 14 veículos não
+  classificáveis (R$ 16 bi) passaram a exibir "cobertura insuficiente para
+  concluir" em lugar do selo de ausência de sinal.
+
+O backtest ganhou higiene adicional: controles descontaminados (positivo de
+qualquer evento fica fora de todos os pools) e publicação das duas colunas de
+antecedência — em 5 dos 6 sinais os controles acendem antes dos positivos, o
+que confirma que a métrica descreve posição na janela, não antecipação.
+
 ## 14. Limitações e agenda
 
 **Limitações** (detalhadas em `docs/metodologia.md`): dados autodeclarados;

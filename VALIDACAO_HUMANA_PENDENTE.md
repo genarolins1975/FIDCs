@@ -40,6 +40,7 @@ tudo aqui impede afirmações públicas categóricas sobre entidades nominadas.
 | 4.3 | **DataJud não retorna as partes** | Impossível casar processo judicial com CNPJ pela API; contornado pelo marcador cadastral do art. 69, que só cobre quem já teve o nome alterado |
 | 4.4 | **Cedentes limitados aos 9 maiores por veículo** | Cobertura de 29,4% do estoque; ranking é piso |
 | 4.5 | **Valor por cotista não é público** | Quem detém a subordinação em valor permanece não observável |
+| 4.6 | **Mapa de gravames e ônus (encumbrance) não existe em fonte pública** | A cadeia credor → instrumento → garantia — quem tem penhor ou cessão fiduciária sobre quais recebíveis, e se o mesmo lastro suporta mais de uma operação — não é reconstituível com dados abertos. A tab X_7 traz o VALOR agregado de garantias declarado pelo próprio veículo, sem identificar beneficiário nem instrumento; os registros de ônus ficam em cartórios de títulos e nas centrais registradoras (B3/CERC), sem acesso público estruturado. O duplo comprometimento do mesmo recebível — mecanismo central em fraudes documentadas — só é detectável por auditoria com acesso às centrais |
 
 ## 5. Recomendações regulatórias derivadas
 

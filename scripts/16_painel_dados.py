@@ -69,7 +69,8 @@ UNIDADES = {
     "n_veiculos": "int", "n_entidades": "int", "n_fundos": "int", "n_sinalizados": "int",
     "n_fidcs_investidos": "int", "n_ligadas": "int", "lente": "int", "n_criticos": "int",
     "n_altos": "int", "posicoes_cotistas": "int", "n_cedentes_declarados": "int",
-    "n_cot": "int",
+    "n_cot": "int", "n_meses": "int", "n_avaliaveis": "int", "n_disparos": "int",
+    "n_veiculos_distintos": "int",
 }
 
 
@@ -137,6 +138,103 @@ def main() -> int:
         "(PL real jun/26 / PL real dez/13)^(1/12,5) − 1", "CVM + BCB/SGS 433",
         "tab IV + IPCA", "calculado", "Fato confirmado por fonte primária", 100.0,
         "Deflacionado pelo IPCA, base jun/2026.", "C006")
+
+    # variações de curto prazo (1, 3 e 6 meses) — mesma fonte da série
+    for nm, dt in (("1m", "2026-05-31"), ("3m", "2026-03-31"), ("6m", "2025-12-31")):
+        hh = serie[serie.DT_COMPTC == dt]
+        if len(hh):
+            ind(f"var_{nm}", c.pl_total / hh.iloc[0].pl_total - 1, "%",
+                f"Variação do PL em {nm.replace('m', ' mês' if nm == '1m' else ' meses')}",
+                f"PL(jun/26) / PL({dt[5:7]}/{dt[2:4]}) − 1", "CVM — Informe Mensal FIDC",
+                "tab IV", "calculado", "Fato confirmado por fonte primária", 100.0,
+                "Variação de estoque: mistura valorização, captação e entrada/saída "
+                "de informantes.", None)
+
+    # ---------------- fluxos do mês do corte ----------------
+    import duckdb as _dd0
+    _con0 = _dd0.connect(os.path.join(ROOT, "data", "duckdb", "fidc.db"), read_only=True)
+    aq1, aq2 = _con0.execute(f"""
+        SELECT SUM(n.TAB_VII_A1_2_VL_DIRCRED_RISCO), SUM(n.TAB_VII_A2_2_VL_DIRCRED_SEM_RISCO)
+        FROM negocios n JOIN painel_saneado p ON p.CNPJ=n.CNPJ AND p.DT_COMPTC=n.DT_COMPTC
+        WHERE n.DT_COMPTC='{CORTE}'""").fetchone()
+    ind("aquisicoes_mes", (aq1 or 0) + (aq2 or 0), "R$",
+        "Direitos creditórios adquiridos no mês",
+        "Σ (TAB_VII_A1_2 + TAB_VII_A2_2) na competência do corte",
+        "CVM — Informe Mensal FIDC", "tab VII", "observado",
+        "Fato confirmado por fonte primária", 100.0,
+        "Fluxo bruto de aquisição, com e sem transferência substancial de risco.", None)
+    # captações e resgates com o MESMO filtro de sanidade da série anual
+    # (operação > 3×max(PL_t, PL_t−1) + R$100 mi é descartada e contada)
+    flx = _con0.execute(f"""
+        WITH p2 AS (
+          SELECT p.CNPJ, p.VL_PL, lag(p.VL_PL) OVER (PARTITION BY p.CNPJ ORDER BY p.DT_COMPTC) pl_ant,
+                 p.DT_COMPTC
+          FROM painel_saneado p),
+        cx AS (
+          SELECT c.TAB_X_TP_OPER op, c.TAB_X_VL_TOTAL v,
+                 (c.TAB_X_VL_TOTAL > 3*GREATEST(coalesce(p2.VL_PL,0),coalesce(p2.pl_ant,0))+1e8) descartada
+          FROM captacoes c JOIN p2 ON p2.CNPJ=c.CNPJ AND p2.DT_COMPTC=c.DT_COMPTC
+          WHERE c.DT_COMPTC='{CORTE}')
+        SELECT op, SUM(v) FILTER (NOT descartada), COUNT(*) FILTER (descartada)
+        FROM cx GROUP BY op""").fetchall()
+    fl = {r[0]: (r[1] or 0, r[2] or 0) for r in flx}
+    n_desc = sum(v[1] for v in fl.values())
+    ind("captacoes_mes", fl.get("Captações no Mês", (None,))[0], "R$",
+        "Captações no mês", "Σ TAB_X_VL_TOTAL (tipo 'Captações no Mês'), com filtro de sanidade",
+        "CVM — Informe Mensal FIDC", "tab X_4", "observado",
+        "Fato confirmado por fonte primária", None,
+        f"Filtro de sanidade idêntico ao da série anual; {n_desc} operações descartadas "
+        "na competência (contadas, nunca somadas).", None)
+    ind("resgates_mes",
+        fl.get("Resgates no Mês", (0,))[0] + fl.get("Amortizações", (0,))[0], "R$",
+        "Resgates e amortizações no mês",
+        "Σ TAB_X_VL_TOTAL (tipos 'Resgates no Mês' + 'Amortizações'), com filtro de sanidade",
+        "CVM — Informe Mensal FIDC", "tab X_4", "observado",
+        "Fato confirmado por fonte primária", None,
+        "Saída efetiva de cotistas; 'Resgates Solicitados' (estoque a liquidar) fica fora.", None)
+
+    # ---------------- o que mudou desde a última competência ----------------
+    ent, sai = _con0.execute(f"""
+      SELECT
+       (SELECT COUNT(*) FROM painel_saneado a WHERE a.DT_COMPTC='{CORTE}'
+         AND NOT EXISTS (SELECT 1 FROM painel_saneado b WHERE b.DT_COMPTC='2026-05-31' AND b.CNPJ=a.CNPJ)),
+       (SELECT COUNT(*) FROM painel_saneado b WHERE b.DT_COMPTC='2026-05-31'
+         AND NOT EXISTS (SELECT 1 FROM painel_saneado a WHERE a.DT_COMPTC='{CORTE}' AND a.CNPJ=b.CNPJ))
+      """).fetchone()
+    _con0.close()
+    ind("mudou_entrantes", ent, "un", "Veículos que passaram a informar no mês",
+        "CNPJs presentes em jun/26 e ausentes em mai/26 (painel canônico)",
+        "CVM — Informe Mensal FIDC", "tab IV", "calculado",
+        "Fato confirmado por fonte primária", 100.0,
+        "Inclui veículos novos e retornos de interrupção de reporte.", None)
+    ind("mudou_saintes", sai, "un", "Veículos que deixaram de informar no mês",
+        "CNPJs presentes em mai/26 e ausentes em jun/26 (painel canônico)",
+        "CVM — Informe Mensal FIDC", "tab IV", "calculado",
+        "Fato confirmado por fonte primária", 100.0,
+        "Interrupção de reporte não distingue liquidação, incorporação ou atraso "
+        "de envio — o motivo não é público.", None)
+    rfsx = read("rf2_sinais.csv")
+    if rfsx is not None and "meses_consecutivos" in rfsx.columns:
+        ind("mudou_sinais_novos", int((rfsx.meses_consecutivos == 1).sum()), "un",
+            "Sinais que acenderam neste mês",
+            "COUNT(sinais ativos com meses_consecutivos = 1)",
+            "metodologia própria sobre informe CVM", "rf2_sinais.csv", "calculado",
+            "Indicador calculado", None,
+            "Primeiro mês do sinal na janela corrente — não distingue estreia "
+            "absoluta de reincidência após pausa.", None)
+        ind("mudou_sinais_persistentes", int((rfsx.meses_consecutivos > 1).sum()), "un",
+            "Sinais persistentes (2+ meses consecutivos)",
+            "COUNT(sinais ativos com meses_consecutivos > 1)",
+            "metodologia própria sobre informe CVM", "rf2_sinais.csv", "calculado",
+            "Indicador calculado", None, None, None)
+        ind("mudou_sinais_encerrados", None, "un",
+            "Sinais encerrados desde a última publicação",
+            "exigiria snapshot da publicação anterior — ainda não versionado",
+            "metodologia própria", "rf2_sinais.csv", "calculado",
+            "Dados insuficientes", None,
+            "NÃO COMPUTÁVEL nesta edição: o painel ainda não guarda snapshot entre "
+            "publicações. O orquestrador passa a versionar rf2_sinais a cada execução; "
+            "a partir da próxima, este número existe.", None)
 
     ag = read("inadimplencia_aging_serie.csv")
     r = ag[ag.DT_COMPTC == CORTE].iloc[0]
@@ -337,15 +435,19 @@ def main() -> int:
         ind("rf_atencao_alta", int(vc.get("atenção alta", 0)), "un",
             "Veículos na faixa de atenção alta",
             "score ≥ p99 da distribuição entre os veículos CLASSIFICÁVEIS "
-            "(cobertura ≥ 50%), não do universo completo",
+            "(cobertura ≥ 50%) COM ao menos um sinal disparado (score > 0) — "
+            "não do universo completo",
             "metodologia própria sobre informe CVM", "rf2_score_veiculo.csv",
             "calculado", "Indicador calculado", None,
             "Faixa estatística, não imputação. Fundos de NPL e distressed disparam por desenho.",
             None)
         ind("rf_sem_sinal", int(vc.get("sem sinal disparado", 0)), "un",
-            "Veículos sem nenhum sinal disparado", "COUNT(n_disparos = 0)",
+            "Veículos classificáveis sem nenhum sinal disparado",
+            "COUNT(cobertura_dados_pct ≥ 50 E score_risco = 0)",
             "metodologia própria sobre informe CVM", "rf2_score_veiculo.csv",
-            "calculado", "Indicador calculado", None, None, None)
+            "calculado", "Indicador calculado", None,
+            "Só entre CLASSIFICÁVEIS: veículo sem cobertura suficiente não entra aqui — "
+            "cobertura insuficiente nunca é lida como ausência de sinal.", None)
     if rf2c is not None:
         ind("rf_n_sinais", len(rf2c), "un", "Sinais catalogados",
             "COUNT(*) do catálogo", "metodologia própria", "rf2_catalogo.csv",
@@ -436,9 +538,17 @@ def main() -> int:
 
     casos = read("casos_regulatorios.csv")
     if casos is not None and len(casos):
+        import re as _re
+
+        def _processos(txt):
+            """Identificadores de processo citados num texto (PAS, SEI etc.)."""
+            return sorted(set(_re.findall(r"\d{5}\.\d{6}/\d{4}-\d{2}", str(txt))))
+
         # Pessoas naturais: cargo + entidade + processo + data permitem reidentificação
         # trivial em consulta pública. No painel elas entram agregadas por caso,
-        # sem cargo nem vínculo específico (recomendação do manual jurídico).
+        # sem cargo nem vínculo específico (recomendação do manual jurídico) — mas o
+        # NÚMERO DO PROCESSO permanece visível: imputação sem identificador do
+        # processo é a regressão apontada pelo espelho.
         pf = casos.entidade_principal.str.contains("pessoa natural", case=False, na=False)
         if pf.any():
             agreg = (casos[pf].groupby(["tipo_evento", "data_evento", "status_processual"],
@@ -447,16 +557,45 @@ def main() -> int:
                           f"{len(x)} pessoa(s) natural(is) acusada(s) — identificação "
                           "suprimida nesta apresentação; consulte a fonte oficial"),
                           papel=("papel", lambda x: "; ".join(sorted(set(x)))),
+                          descricao_irregularidade=("descricao_irregularidade", lambda x:
+                          "Processo(s): " + "; ".join(sorted({p for t in x for p in _processos(t)}))
+                          + ". Condutas individuais descritas na decisão oficial (fonte)."),
                           nivel_evidencia=("nivel_evidencia", "first"),
                           fonte_url=("fonte_url", "first")))
             casos = pd.concat([casos[~pf], agreg], ignore_index=True)
+        # "Seu diretor responsável foi multado…" liga cargo a empresa nominada
+        # (reidentificação trivial). A sanção à pessoa natural fica registrada
+        # sem o cargo; o nome está na fonte oficial.
+        if "descricao_irregularidade" in casos.columns:
+            casos["descricao_irregularidade"] = casos.descricao_irregularidade.str.replace(
+                r"Seus? diretora? respons[áa]vel foi multad[oa]",
+                "Pessoa natural também foi multada", regex=True, case=False)
+        # CR010: "gestora, seu diretor, Santander Securities e seu diretor" liga
+        # cargo a empresa nominada — reidentificação trivial. Reescrito no padrão
+        # agregado, mantendo instituições, valores e o número do processo.
+        m10 = casos.get("caso_id", pd.Series(dtype=str)).eq("CR010") \
+            if "caso_id" in casos.columns else \
+            casos.entidade_principal.str.contains("seu diretor", case=False, na=False)
+        if m10.any():
+            casos.loc[m10, "entidade_principal"] = (
+                "Proponentes de termo de compromisso no PAS CVM 19957.006858/2019-25 — "
+                "2 instituições e 2 pessoa(s) natural(is), identificação das pessoas "
+                "naturais suprimida nesta apresentação")
+            casos.loc[m10, "descricao_irregularidade"] = (
+                "PAS CVM 19957.006858/2019-25. Propostas de termo de compromisso "
+                "apresentadas por 2 instituições (R$ 90.000,00 e R$ 300.000,00) e por "
+                "2 pessoas naturais (R$ 60.000,00 e R$ 100.000,00). O Colegiado da CVM "
+                "rejeitou, por unanimidade, todas as propostas.")
     tabela("casos", casos,
            [c_ for c_ in ["entidade_principal", "papel", "tipo_evento", "data_evento",
-                          "status_processual", "nivel_evidencia", "fonte_url"]
+                          "descricao_irregularidade", "status_processual",
+                          "nivel_evidencia", "fonte_url"]
             if casos is not None and c_ in casos.columns],
            "Casos regulatórios e sancionadores", "CVM, BCB e fontes oficiais",
            "processos e decisões",
-           "Investigação, acusação e condenação são estágios distintos e estão explicitados.",
+           "Investigação, acusação e condenação são estágios distintos e estão explicitados. "
+           "A descrição da conduta e o número do processo qualificam cada imputação — "
+           "linha sem eles não é publicável.",
            limite=40)
 
     testes = read("testes_auditoria.csv")
@@ -523,13 +662,78 @@ def main() -> int:
             for cnpj, grp in rfs.groupby(rfs[col_cnpj].astype(str)):
                 sinais_v[cnpj.zfill(14)] = sorted(set(grp[col_sig].astype(str)))[:12]
     fichas["sinais"] = fichas.CNPJ.astype(str).map(lambda x: sinais_v.get(x, []))
+    # Cobertura e classificação rf2 em TODA ficha: sem isso, um veículo não
+    # classificável apareceria com "nenhum sinal disparado" — a regra-mãe
+    # (cobertura insuficiente nunca é baixo risco) vale também aqui.
+    if rf2s is not None:
+        rfx = rf2s.copy()
+        rfx["CNPJ"] = rfx.CNPJ.astype(str).str.replace(r"\.0$", "", regex=True).str.zfill(14)
+        rfx = rfx.set_index("CNPJ")[["cobertura_dados_pct", "classificacao",
+                                     "score_risco", "n_avaliaveis", "n_disparos"]]
+        fichas = fichas.merge(rfx, left_on=fichas.CNPJ.astype(str).str.zfill(14),
+                              right_index=True, how="left").drop(columns=["key_0"],
+                                                                 errors="ignore")
     TAB["fichas"] = dict(
         rotulo="Ficha do veículo", fonte="CVM — informe mensal (múltiplas tabelas)",
         campo="painel canônico do corte",
         nota="Os 400 maiores veículos por patrimônio. Campos nulos aparecem como '—' e "
-             "significam ausência de reporte, nunca zero.",
+             "significam ausência de reporte, nunca zero. Veículo com cobertura de dados "
+             "abaixo de 50% é NÃO CLASSIFICÁVEL: a ficha não emite juízo de sinal para ele.",
         colunas=list(fichas.columns),
         linhas=json.loads(fichas.to_json(orient="values")))
+
+    # ---------------- raio-X da empresa (grupo econômico) ----------------
+    # Visão centrada na EMPRESA: em quais veículos ela aparece como cedente,
+    # com que recorrência, e se há recuperação/falência ou papel de cotista
+    # corporativo documentado. Cobertura herdada da lente 4 (piso, top-9).
+    emp = read("lente_4_cedentes.csv", dtype={"doc_cedente": str})
+    if emp is not None and len(emp):
+        emp["doc_cedente"] = emp.doc_cedente.astype(str).str.zfill(14)
+        rec = read("cedentes_recorrencia.csv", dtype={"doc_cedente": str})
+        if rec is not None:
+            rec["doc_cedente"] = rec.doc_cedente.astype(str).str.zfill(14)
+            emp = emp.merge(rec[["doc_cedente", "n_meses", "primeira", "ultima"]],
+                            on="doc_cedente", how="left")
+        rjm2 = read("rj_matches_cedentes.csv", dtype={"doc_cedente": str})
+        if rjm2 is not None and len(rjm2):
+            rjm2["doc_cedente"] = rjm2.doc_cedente.astype(str).str.zfill(14)
+            st = (rjm2.groupby("doc_cedente")
+                  .apply(lambda g: "; ".join(f"{r.evento} ({r.data_evento})"
+                                             for r in g.itertuples()), include_groups=False)
+                  .rename("status_judicial"))
+            emp = emp.merge(st, on="doc_cedente", how="left")
+        icx = read("investidores_corporativos.csv", dtype=str)
+        if icx is not None and "cnpj" in icx.columns:
+            docs_ic = set(icx.cnpj.astype(str).str.replace(r"\D", "", regex=True).str.zfill(14))
+            emp["cotista_corporativo"] = emp.doc_cedente.isin(docs_ic)
+        emp = emp.sort_values("exposicao_estimada", ascending=False).head(60)
+        # veículos onde a empresa aparece como cedente (nome + % declarado)
+        docs = "','".join(emp.doc_cedente)
+        vlist = con.execute(f"""
+          SELECT c.DOC_CEDENTE doc, p.DENOM_SOCIAL nome, MAX(c.PR_CEDENTE) pr
+          FROM cedentes c JOIN painel_saneado p ON p.CNPJ=c.CNPJ AND p.DT_COMPTC=c.DT_COMPTC
+          WHERE c.DT_COMPTC='{CORTE}' AND c.DOC_CEDENTE IN ('{docs}')
+            AND c.PR_CEDENTE > 0 AND c.PR_CEDENTE <= 100
+          GROUP BY 1,2 ORDER BY pr DESC""").df()
+        vmap = {d: [f"{r.nome} ({r.pr:.0f}%)" for r in g.head(5).itertuples()]
+                for d, g in vlist.groupby("doc")}
+        emp["veiculos"] = emp.doc_cedente.map(lambda d: vmap.get(d, []))
+        emp = emp[[c_ for c_ in ["razao_social", "doc_cedente", "cnae_principal",
+                                 "situacao", "uf", "exposicao_estimada", "n_veiculos",
+                                 "n_meses", "primeira", "ultima", "status_judicial",
+                                 "cotista_corporativo", "veiculos"] if c_ in emp.columns]]
+        TAB["empresas"] = dict(
+            rotulo="Raio-X da empresa (cedente/originador)",
+            fonte="CVM — tab I (cedentes) + base pública do CNPJ + DataJud/CNJ",
+            campo="lente_4_cedentes + cedentes_recorrencia + rj_matches_cedentes",
+            nota="Estoque ATRIBUÍDO de recebíveis originados — não é dívida da empresa "
+                 "nem fluxo cedido. Cobertura é piso (top-9 cedentes por veículo, 29,4% "
+                 "do estoque). Recuperação judicial NÃO é evidência de irregularidade. "
+                 "Percentual entre parênteses = participação declarada da empresa na "
+                 "carteira do veículo.",
+            colunas=list(emp.columns),
+            unidades=[UNIDADES.get(c_, "auto") for c_ in emp.columns],
+            linhas=json.loads(emp.to_json(orient="values")))
     con.close()
 
     # ---------------- meta ----------------

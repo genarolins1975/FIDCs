@@ -175,3 +175,58 @@ print("X_1_1 cols:",x11.columns.tolist())
 x11['CNPJ']=cnpj(x11.CNPJ_FUNDO_CLASSE); x11=x11[x11.CNPJ.isin(P)]
 nc=[c for c in x11.columns if c.startswith('TAB_X_NR')]
 print("  soma X_1_1:",f"{sum(num(x11[c]).sum() for c in nc):,.0f}")
+
+# =====================================================================
+# REVALIDAÇÃO (2ª passada) — testes adicionais
+# =====================================================================
+def revalidacao():
+    import json, pandas as pd, numpy as np
+    from math import comb
+    A = '/home/user/FIDCs/data/analytic/'
+    H = json.load(open(A + 'painel_dados.json'))
+
+    # 1) fórmulas que não reproduzem o valor publicado
+    rf = pd.read_csv(A + 'rf2_score_veiculo.csv')
+    cls = rf[rf.cobertura_dados_pct >= 50]
+    print("rf_atencao_alta: pela formula publicada (p99 dos classificaveis) =",
+          int((cls.score_risco >= cls.score_risco.quantile(0.99)).sum()),
+          "| publicado =", H['indicadores']['rf_atencao_alta']['valor'],
+          "| base real (classificaveis com disparo) =",
+          int((cls.score_risco >= cls[cls.score_risco > 0].score_risco.quantile(0.99)).sum()))
+    print("rf_sem_sinal: COUNT(n_disparos=0) =", int((rf.n_disparos == 0).sum()),
+          "| publicado =", H['indicadores']['rf_sem_sinal']['valor'],
+          "| cob>=50 & score==0 =", int(((rf.cobertura_dados_pct >= 50) & (rf.score_risco == 0)).sum()))
+
+    # 2) ficha: não classificáveis exibidos como "nenhum disparado"
+    t = H['tabelas']['fichas']
+    f = pd.DataFrame(t['linhas'], columns=t['colunas'])
+    rf['CNPJ'] = rf.CNPJ.astype(str).str.zfill(14)
+    m = f.merge(rf[['CNPJ', 'classificacao', 'cobertura_dados_pct']], on='CNPJ', how='left')
+    sem = m[m.sinais.apply(lambda s: not s)]
+    nc = sem[sem.classificacao == 'não classificável']
+    print(f"fichas 'nenhum disparado' que sao NAO CLASSIFICAVEIS: {len(nc)}  "
+          f"PL somado = {nc.VL_PL.sum():,.2f}")
+
+    # 3) lente 5: reprodução do filtro de inconsistência
+    l5 = pd.read_csv(A + 'lente_5_sacados_concentracao.csv')
+    print("lente5 marcados inconsistentes (top25/dc > 1,05):",
+          int(l5.inconsistente_viii_vs_i.fillna(False).astype(bool).sum()))
+
+    # 4) backtest: Fisher exato unilateral
+    def fisher_one(a, b, c, d):
+        n = a + b + c + d
+        return sum(comb(a + b, x) * comb(c + d, a + c - x) / comb(n, a + c)
+                   for x in range(a, min(a + b, a + c) + 1))
+    r = pd.read_csv(A + 'backtest_resumo.csv')
+    r = r[r.caso == 'CR023']
+    for s in ['S1', 'S2', 'S3', 'S4', 'S5', 'S6']:
+        p_ = r[(r.sinal == s) & (r.grupo == 'positivo')].iloc[0]
+        c_ = r[(r.sinal == s) & (r.grupo == 'controle')].iloc[0]
+        a, b = int(p_.n_disparou), int(p_.n_veiculos - p_.n_disparou)
+        c, d = int(c_.n_disparou), int(c_.n_veiculos - c_.n_disparou)
+        print(f"  {s}: p_meu={fisher_one(a,b,c,d):.4f} p_pub={p_.fisher_p} | "
+              f"antecedencia pos={p_.antecedencia_mediana_meses} ctrl={c_.antecedencia_mediana_meses}")
+
+
+if __name__ == '__main__':
+    revalidacao()

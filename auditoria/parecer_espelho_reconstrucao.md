@@ -722,3 +722,349 @@ esse build não estão cobertos por este parecer — em particular, a tabela `fi
 
 *Auditoria executada em 18/08/2026. Recálculo: `auditoria/espelho_reconstrucao_recalc.py`.
 Sonda do navegador: `auditoria/espelho_reconstrucao_probe.js`.*
+
+---
+---
+
+# REVALIDAÇÃO — segunda passada (build de 18/08/2026 18:35 UTC)
+
+**Objeto:** `relatorio/painel_fidc_v2.html` (md5 `e2d6a2d1dcf1a4b8b4da7d2741c6b537`),
+`data/analytic/painel_dados.json` (md5 `5cdeb6ca5028dbb73fc909b12b74ab1e`),
+`BACKTEST_RED_FLAGS.md`, `data/analytic/*.csv`. Commit `8391baf` ("Correções do
+parecer espelho: os três bloqueantes e os achados materiais").
+
+**Método:** os mesmos scripts da primeira passada, reexecutados contra o build novo
+(`auditoria/espelho_reconstrucao_recalc.py`), mais sondas de navegador novas para a
+aba **Ficha do veículo**, que não existia. O JSON embutido no HTML e o
+`painel_dados.json` do disco foram comparados campo a campo: **idênticos** em
+`indicadores` e em `tabelas` — a dessincronia da primeira passada não se repetiu.
+
+**Recálculo independente:** os 18 indicadores continuam batendo com **diferença de
+0,000000%** (PL R$ 999.497.428.095,20; 4.327 veículos; inadimplência 0,09130353506;
+identidade contábil 0 violações em 4.327 avaliáveis; cobertura da tab VIII 0,7967534;
+séries sênior/mezanino/subordinada; 232 ausentes em julho; 979 séries abaixo do
+esperado; 28 veículos com garantia). Zero erro de console e zero `pageerror` nas
+sete abas, em tema claro e escuro.
+
+## R.1 — Situação dos três bloqueantes
+
+### BLOQUEANTE 1 (erro de escala de 100×) — **CORRIGIDO**
+
+O renderizador deixou de adivinhar. Cada tabela carrega `unidades` paralelo a
+`colunas` e `cellFmt(col, v, unidade)` faz `switch` sobre a unidade declarada, sem
+inspecionar magnitude nem nome de coluna. Verifiquei **célula a célula** o valor
+pintado contra o JSON sob a unidade declarada:
+
+* **Lente 5** — as 25 linhas renderizam exatamente o esperado. O topo agora é
+  `101,7% → 100,4% → 100,3% → 100,1% → … → 100%`, monotônico. A inversão
+  `1,6%` acima de `129%` desapareceu.
+* **Catálogo de sinais** — `JR-01` renderiza **0,9%** (era 90%) e `PO-04`
+  renderiza **0,7%** (era 69%). Corretos.
+* Varri as 13 tabelas: nenhuma coluna percentual, monetária ou de índice
+  diverge do JSON. **Achado encerrado.**
+
+### BLOQUEANTE 2 (fórmula que não fechava) — **PARCIALMENTE CORRIGIDO**
+
+* `provisionamento` — **corrigido e reproduzido.** A fórmula publicada é agora
+  `(TAB_I2A11 + TAB_I2B11) ÷ (TAB_V_B_VL_DIRCRED_INAD + TAB_VI_B_VL_DIRCRED_INAD)`
+  e o campo `"tabs I (numerador), V e VI (denominador)"`. Executei a fórmula
+  literalmente sobre os CSV brutos: **0,978886** contra **0,978886** publicado.
+* `rf_atencao_alta` — **ainda não reproduz.** A fórmula passou de uma população
+  errada para outra. Diz agora *"p99 da distribuição entre os veículos
+  CLASSIFICÁVEIS (cobertura ≥ 50%), não do universo completo"*. Seguindo isso ao
+  pé da letra:
+
+  | base | n | p99 | veículos ≥ p99 |
+  |---|---:|---:|---:|
+  | universo (formulação antiga) | 4.327 | 23,86 | 44 |
+  | **classificáveis (formulação atual)** | **3.228** | **16,39** | **41** |
+  | classificáveis **com ≥ 1 disparo** (o que o código faz) | 1.301 | 18,71 | **14** |
+
+  O valor publicado é 14. A fórmula publicada devolve 41 — fator ~3. O corte real
+  está em `scripts/13_red_flags_v2.py:1807` (`base_sc = sc.loc[cls & (sc.score_risco > 0)]`)
+  e a condição `score_risco > 0` continua fora da fórmula.
+* **Achado novo, da mesma família:** `rf_sem_sinal` publica
+  `formula = "COUNT(n_disparos = 0)"` e `valor = 1927`. `COUNT(n_disparos = 0)`
+  sobre `rf2_score_veiculo.csv` devolve **2.534**. A definição efetiva é
+  `cobertura ≥ 50% E score = 0`, que dá exatamente 1.927. Diferença de **607
+  veículos**. Atenuante: `rf_sem_sinal` não é renderizado em nenhuma tela — o
+  defeito está no JSON publicado, não na página.
+* **Menor, mas na mesma inspeção:** `sacado_n_top1_50` publica
+  `formula = "contagem sobre veículos com razão definida"`, que não menciona o
+  limiar de 50% — o único lugar onde ele aparece é o rótulo.
+
+Conclusão: dos quatro indicadores cuja fórmula testei exaustivamente nesta passada,
+**um foi corrigido, um continua sem reproduzir, um novo foi encontrado sem
+reproduzir e um está incompleto**. O bloqueante não pode ser considerado sanado:
+a auditoria por fórmula publicada ainda falha em 2 de 36 indicadores.
+
+### BLOQUEANTE 3 (manual jurídico) — **PARCIALMENTE CORRIGIDO, COM REGRESSÃO**
+
+Corrigido:
+
+* **CRSFN — 16 de 16.** Todas as condenações de 1ª instância trazem agora
+  *"cabe recurso ao CRSFN com efeito suspensivo"*. Verifiquei linha a linha.
+* **CNPJ — corrigido.** Serializado como string com `zfill(14)`:
+  `"08662033000109"` chega íntegro à tela, com o zero à esquerda preservado.
+  (Sugestão cosmética, não achado: aplicar a máscara `08.662.033/0001-09`.)
+* **`fonte_url` — de volta** à tabela de casos.
+* **Pessoas naturais — agregadas** em três linhas
+  (*"N pessoa(s) natural(is) acusada(s) — identificação suprimida nesta
+  apresentação; consulte a fonte oficial"*), sem cargo e sem gestora.
+
+Não corrigido / regressão:
+
+* **A agregação é incompleta.** A linha 5 publica, como nome de entidade:
+  *"Acusados do PAS CVM 19957.006858/2019-25 (gestora, **seu diretor**, **Santander
+  Securities** e **seu diretor**)"*. Cargo + empresa nominada + número do processo
+  identifica univocamente duas pessoas naturais, exatamente o padrão que as outras
+  três linhas passaram a evitar. A reversibilidade que apontei apenas mudou de
+  linha.
+* **REGRESSÃO: a coluna `descricao_irregularidade` foi removida da tabela
+  publicada.** Ela continua em `casos_regulatorios.csv`, mas saiu de
+  `painel_dados.json → tabelas.casos.colunas`. Consequências, ambas ruins:
+  1. Quinze entidades nominadas — **Banco Bradesco, Banco Santander, KPMG,
+     Deutsche Bank, BNY Mellon, Oliveira Trust, Planner, Finaxis, Gradual,
+     Trendbank, Regen** — aparecem agora na tela assim, e só assim:
+     `Banco Bradesco S.A. | custodiante | PAS | 2015-10-20 | condenacao (1ª
+     instância administrativa; cabe recurso ao CRSFN com efeito suspensivo) |
+     fato confirmado por fonte primária | URL`.
+     **Nominar como condenada uma instituição sem dizer por qual conduta é mais
+     lesivo, não menos.** A descrição era justamente o que qualificava a imputação
+     (*"na qualidade de administradora, por falha no dever de diligência…"*).
+  2. **O identificador do processo sumiu da tela.** O número do PAS vivia na
+     descrição. Hoje `19957.006858/2019-25` aparece uma única vez na página
+     inteira — por acidente, dentro do nome da linha 5. O item do checklist
+     *"Toda menção a processo tem identificador, autoridade, data, status e URL"*
+     (`docs/LIMITACOES_E_RISCOS_JURIDICOS.md §9`) continua descumprido: a correção
+     trocou a violação do "URL" pela violação do "identificador".
+
+## R.2 — Achado NOVO e bloqueante: a aba "Ficha do veículo"
+
+A aba não existia na primeira passada. Auditei-a integralmente.
+
+**O que está certo.** A ficha **não** usa `renderTable`: tem formatadores próprios
+(`brl()`, `pct()`) que devolvem `—` para `null`. Distingue explicitamente zero
+reportado de ausência — exibe **"R$ 0 (reportado)"**, o que é uma boa prática e
+merece registro. Conferi no bruto que os zeros exibidos são zeros de fonte: os 41
+veículos com `pct_maior_sacado = 0` têm linha na tab VIII com `VALOR = 0,00`, e os
+126 com `inad_pct = 0` têm `TAB_V_B = 0` com `TAB_V_A > 0`. **Nenhum zero
+fabricado.** Busca por nome e por CNPJ funciona; seleção sem resultado devolve
+mensagem; zero erro de console.
+
+**O que reprova.** A ficha exibe, no campo "Sinais de atenção", ou os códigos
+disparados, ou o chip **verde** `nenhum disparado`. Cruzei as 400 fichas com
+`rf2_score_veiculo.csv`:
+
+| classificação do veículo | fichas que exibem "nenhum disparado" |
+|---|---:|
+| `sem sinal disparado` (cobertura ≥ 50%) | 47 |
+| **`não classificável` (cobertura < 50%)** | **14** |
+
+Esses 14 veículos somam **R$ 16.071.657.327,79 de patrimônio líquido** e incluem
+EXPERT III (R$ 3,5 bi), Solis Capital Antares Advisory (R$ 2,1 bi), FIC RED P
+(R$ 1,7 bi), Ouro Preto FIC (R$ 1,3 bi) e Solis Capital Antares (R$ 1,3 bi) —
+todos com `cobertura_dados_pct = 45,65%`.
+
+Reproduzido na tela (busca "EXPERT III"):
+
+```
+EXPERT III FUNDO DE INVESTIMENTO EM DIREITOS CREDITÓRIOS DE RESPONSABILIDADE ILIMITADA
+CNPJ 53073485000100 · Classe
+Patrimônio líquido            R$ 3,5 bi
+Direitos creditórios          R$ 0 (reportado)
+Sinais de atenção             [chip verde] nenhum disparado
+```
+
+**Materialidade: crítica.** O *warnbox* da tela 4, duas abas antes, diz:
+*"Cobertura insuficiente gera classificação 'não classificável' — nunca 'baixo
+risco'."* A tabela `rf_score` foi corretamente saneada nesta rodada para honrar
+essa regra. **A aba nova a viola no formato mais grave possível**: não um rótulo
+neutro, mas um **chip verde**, que é o vocabulário visual de atestado de
+conformidade, sobre fundos **nominados**, de bilhões de reais, cuja informação
+pública não permite concluir coisa alguma. E a ficha **não exibe cobertura em
+nenhum campo** — o leitor não tem como suspeitar. É a mesma falha que motivou a
+reprovação anterior, migrada da tela 4 para a aba 5 e agravada pela cor.
+
+Achados secundários da ficha, não bloqueantes: o `<select>` lista apenas **200 dos
+400** veículos enquanto a busca está vazia (`slice(0,200)`), sem avisar; e os
+códigos de sinal (`CN-04`, `QA-04`…) aparecem sem nome nem link para o catálogo.
+
+## R.3 — Achados materiais: o que foi corrigido
+
+Todos verificados por recálculo próprio:
+
+* **Lente 9 — corrigida.** Passou de 0 para **21 entidades**, batendo com
+  `rj_casos = 21` da tela 5. A contradição entre telas acabou.
+* **`rf_score` — corrigida.** A tabela publica agora **14 "atenção alta" + 11
+  "atenção média"**, todos classificáveis, com PL e materialidade reais
+  (SPDA Habitação, ABC I, NPL II, C3E Créditos Judiciais…). Nenhuma linha com
+  PL zero. A nota explicita que os não classificáveis ficam fora e são contados
+  no cartão próprio. Exatamente a correção pedida.
+* **Lente 5 — exclusão implementada e reproduzida.** Reimplementei o filtro:
+  `top25 / dc_total > 1,05` marca **307** veículos (idêntico ao publicado), restam
+  **932** elegíveis com PL > R$ 100 mi, e o top-25 que reproduzi é **exatamente** o
+  publicado. *Ressalva:* a nota diz que foram excluídos os veículos "em que a soma
+  dos 25 maiores devedores **excede** a carteira", mas o critério aplicado é
+  "excede em **mais de 5%**" — e por isso 9 das 25 linhas publicadas ainda têm
+  maior devedor acima de 100% da carteira (até 101,7%). A nota descreve um
+  critério mais estrito do que o executado.
+* **T13 — corrigido:** `37/37`, coerente com `n_arquivos_manifesto = 37`.
+* **T15 — corrigido:** o detalhe agora lê *"0 veículos sem X_2 no corte; a
+  diferença residual vem de defasagem de marcação"*, que é precisamente o que eu
+  havia apurado.
+* **Backtest — correções substantivas, todas reproduzidas.** Recalculei o teste
+  exato de Fisher **unilateral** para os seis sinais e obtive os seis valores
+  publicados até a quarta casa:
+
+  | Sinal | Positivos | Controles | Lift (meu = pub) | p (meu = pub) |
+  |---|---|---|---:|---:|
+  | S5 | 144/151 | 96/453 | 4,5000 | 0,0000 |
+  | S3 | 125/150 | 126/444 | 2,9365 | 0,0000 |
+  | S1 | 16/58 | 30/193 | 1,7747 | **0,0328** |
+  | S4 | 63/149 | 155/432 | 1,1784 | 0,0983 |
+  | S6 | 18/59 | 98/219 | 0,6818 | **0,9839** |
+  | S2 | 0/132 | 24/345 | 0,0000 | 1,0000 |
+
+  **Retiro formalmente minha objeção b.9.1.** Sob o teste unilateral na direção
+  da hipótese — que é o enquadramento correto para "positivos disparam mais" —
+  S1 (p = 0,033) e S6 (p = 0,984) **não** são estatisticamente indistinguíveis:
+  são opostos. Manter S1 e descartar S6 passou a ser uma decisão sustentada pelos
+  números, e o descarte adicional de S4 (p = 0,098) é coerente com o mesmo
+  critério. A coluna `n_nao_avaliavel` foi separada de `n_disparou`, e o
+  `coalesce(v_sub,0)` de S3 foi removido — o que mudou o grupo de controle de
+  S3 e elevou o lift de 2,59 para 2,94. **Objeção b.4 encerrada.**
+* **Falso negativo CR024 — corrigido.** O texto agora diz: *"Dos seis sinais,
+  quatro foram avaliáveis e nenhum disparou; dois (S1 e S6) ficaram não
+  avaliáveis por ausência de cedente declarado — e 'não avaliável' não é 'não
+  disparou'."* É exatamente a distinção que faltava. **Objeção b.9.4 encerrada.**
+* **Teclado — corrigido.** `Enter` sobre o link de evidência focado abre a gaveta;
+  `Escape` fecha. Contraste do `footer` no tema claro também foi corrigido.
+
+## R.4 — Achados materiais que NÃO foram corrigidos
+
+1. **`BACKTEST_RED_FLAGS.md` publica uma linha com números de duas execuções
+   diferentes.** A tabela de CR023 lista `S3 — Controles **32,2%**`, valor da
+   execução anterior; o `backtest_resumo.csv` do mesmo build diz **28,4%**
+   (126/444). Na mesma linha, o lift **2,94** já é o novo (83,3 / 28,4 = 2,94;
+   83,3 / 32,2 daria 2,59). Isto é o sintoma exato que apontei em b.5 — artefato
+   derivado publicado sem reexecução — reaparecendo no arquivo que mais depende de
+   consistência interna.
+2. **Contaminação do grupo de controle do backtest — não corrigida.** Continuam
+   56 pares (CNPJ, competência) duplicados em `backtest_detalhe.csv`, envolvendo 7
+   CNPJs, entre eles veículos **positivos em CR023 usados como controle em CR024**.
+3. **Lente 1 declara cobertura 100,0%** com 492 gestores, 4.325 de 4.327 veículos e
+   soma de 99,9937% do PL — enquanto a lente 8, na **mesma tela**, publica
+   `Gestor · cobertura 0,99994` para a mesma grandeza.
+4. **Cobertura da lente 5 continua com dois valores** (69,3% na tela 3; 79,7% na
+   tela 4) sem reconciliação, e a cobertura **em valor** — 45,3% do estoque de DC
+   efetivamente explicado pelas posições listadas, que recalculei — segue não
+   publicada.
+5. **"Todo número é clicável e abre a evidência que o sustenta"** continua no
+   subtítulo da capa. Medi neste build: **37 elementos `.ev`** contra **406 células
+   `td.num` sem gaveta**.
+6. **Contraste `.tile .src`**: 3,15 no tema claro e 4,20 no escuro (mínimo AA para
+   texto pequeno: 4,5). O chip âmbar no tema claro fica em 4,48.
+
+## R.5 — Resposta à pergunta em aberto: antecedência dos controles
+
+**Sim, a omissão induz a erro. Publique as duas colunas. Não é bloqueante.**
+
+A coluna se chama "Antecedência mediana" e fica numa tabela em que todas as demais
+colunas são comparativas (positivos, controles, lift, p). O leitor infere que é uma
+propriedade preditiva do sinal — *"S5 acende 4 meses antes"*. Os dados do próprio
+`backtest_resumo.csv` desmentem essa leitura:
+
+| Sinal | Antecedência positivos | Antecedência **controles** |
+|---|---:|---:|
+| S5 | 4 | **11** |
+| S3 | 0 | **5** |
+| S1 | 2 | **10** |
+| S6 | 1 | **9** |
+| S2 | — | **8** |
+| S4 | **8** | 5 |
+
+Em **cinco dos seis sinais os controles acendem mais cedo que os positivos**. Ou
+seja: a "antecedência" mede sobretudo em que ponto da janela de 12 meses o sinal
+costuma aparecer, não antecipação do evento. Publicada só a metade favorável, ela
+sugere o contrário.
+
+Por que **não** é bloqueante: o documento em nenhum lugar afirma poder preditivo —
+ao contrário, a conclusão nega explicitamente ("*O backtest não autoriza afirmar que
+os sinais preveem eventos*"), e a seção de armadilhas antecipa o problema do
+confundimento estrutural. A omissão enfraquece um documento que já é
+autolimitado, mas não afirma nada falso. **Correção:** acrescentar a coluna de
+controles e uma linha de leitura — *"em 5 dos 6 sinais os controles acendem antes:
+a coluna mede posição na janela, não antecipação"*. **Teste:** assertar que toda
+métrica publicada por grupo tenha as duas colunas.
+
+## R.6 — Notas revistas
+
+| # | Dimensão | 1ª passada | **Revalidação** | Movimento |
+|---|---|:---:|:---:|---|
+| 1 | Completude | 8 | **8** | lente 9 e `fonte_url` de volta, ficha nova; mas `descricao_irregularidade` removida e cobertura-em-valor ainda ausente |
+| 2 | Precisão | 5 | **9** | erro de 100× eliminado; todas as células conferidas contra o JSON |
+| 3 | Rastreabilidade | 5 | **6** | `provisionamento` e teclado corrigidos; `rf_atencao_alta` ainda não reproduz, `rf_sem_sinal` novo, identificador do processo saiu da tela |
+| 4 | Consistência conceitual | 6 | **7** | T13, T15, `rf_score`, lente 9 corrigidos; persistem dupla cobertura, lente 1×lente 8 e a linha mista do backtest |
+| 5 | Reprodutibilidade | 7 | **7** | HTML e JSON sincronizados; segue sem orquestrador — e o `BACKTEST_RED_FLAGS.md` prova que artefato velho passou de novo |
+| 6 | Duplicidades | 9 | **9** | inalterado; contaminação do controle não corrigida |
+| 7 | Resolução de entidades | 6 | **8** | CNPJ íntegro como string; agregação de pessoas naturais quase completa (linha 5 ainda reversível) |
+| 8 | Tratamento das limitações | 7 | **7** | backtest muito melhor (Fisher, não avaliáveis, falso negativo honesto, S3 sem `coalesce`); mas a ficha viola a regra-mãe e a descrição sumiu |
+| 9 | Clareza | 6 | **7** | lente 5 coerente, teclado e rodapé corrigidos; "todo número é clicável" ainda falso |
+| 10 | Utilidade econômica | 6 | **7** | `rf_score` e lente 9 passaram a ser úteis, ficha é um ganho real; mas o chip verde engana sobre R$ 16 bi |
+
+**Média: 7,5** (era 6,5).
+
+## R.7 — Veredito da revalidação
+
+# REPROVADO
+
+Reprovado por margem estreita, e por instrução expressa: persiste defeito
+bloqueante. Reconheço que a rodada foi séria — sete dos dez achados materiais e
+dois dos três bloqueantes foram genuinamente resolvidos, e o backtest melhorou a
+ponto de eu retirar duas objeções formalmente. A camada de dados segue impecável:
+18 indicadores reproduzidos com diferença de 0,000000%.
+
+**Três defeitos impedem a publicação:**
+
+1. **[NOVO] A aba "Ficha do veículo" exibe chip verde "nenhum disparado" para 14
+   veículos não classificáveis que somam R$ 16,07 bi de PL**, sem mostrar cobertura
+   em campo algum. É a regra-mãe do produto — *cobertura insuficiente nunca é baixo
+   risco* — violada em fundos nominados, com o vocabulário visual do atestado de
+   conformidade. Corrigida na tela 4, reintroduzida na aba nova.
+   **Correção:** substituir o chip por `cobertura insuficiente para concluir
+   (45,7% dos sinais avaliáveis)`, em cor neutra, e acrescentar uma linha fixa
+   "Cobertura de dados" a toda ficha. **Teste:** assertar que nenhuma ficha com
+   `cobertura_dados_pct < 50` renderize `class="chip ok"`.
+2. **A fórmula de `rf_atencao_alta` continua sem reproduzir o valor** (41 pela
+   fórmula publicada, 14 publicado) e um caso novo apareceu (`rf_sem_sinal`: 2.534
+   pela fórmula, 1.927 publicado). O bloqueante 2 foi tratado indicador a
+   indicador, não sistemicamente.
+   **Correção:** acrescentar `E score_risco > 0` à fórmula de `rf_atencao_alta` e
+   `cobertura ≥ 50% E score = 0` à de `rf_sem_sinal`. **Teste — o que resolve a
+   classe inteira:** um teste que, para **cada** um dos 36 indicadores, execute a
+   `formula` publicada contra os CSV e falhe o build se divergir de `valor` em mais
+   de 0,1%. Enquanto esse teste não existir, este achado voltará.
+3. **A remoção de `descricao_irregularidade` é uma regressão jurídica.** Quinze
+   instituições nominadas aparecem como condenadas em 1ª instância **sem que a
+   página diga por qual conduta e sem o número do processo** — o identificador
+   saiu da tela junto com a descrição, descumprindo o mesmo checklist que a
+   correção pretendia atender. E a linha 5 ainda identifica duas pessoas naturais
+   por cargo + empresa + número do PAS.
+   **Correção:** devolver `descricao_irregularidade` às colunas publicadas (é o que
+   qualifica a imputação) e reescrever a linha 5 no padrão agregado das linhas
+   22-24. **Teste:** o linter de publicação que já recomendei — falhar o build se
+   houver linha com `status_processual` contendo "condena" sem número de processo
+   visível na linha, ou com cargo de pessoa natural associado a empresa nominada.
+
+Não bloqueiam, mas devem entrar na mesma rodada: a linha `S3 — Controles 32,2%` do
+`BACKTEST_RED_FLAGS.md`, que mistura duas execuções; a coluna de antecedência dos
+controles (R.5); a contaminação do grupo de controle de CR024; a cobertura da
+lente 1 (100,0% × 99,9937%); a cobertura em valor da lente 5 (45,3%); e o subtítulo
+"Todo número é clicável", falso para 406 dos 443 números da página.
+
+Corrigidos os três itens acima e implementado o teste automático de fórmulas do
+item 2 — que é o único que impede a reincidência —, **aprovo com ressalvas**. O
+trabalho está a uma rodada curta disso.
+
+*Revalidação executada em 18/08/2026, 18:35–18:45 UTC, sobre o commit `8391baf`.*

@@ -30,8 +30,21 @@ lentes de exposição, 46 sinais de atenção e evidência auditável em cada n�
 
 ## Reprodução
 
+Caminho rápido — o orquestrador executa o pipeline na ordem correta, aplica os
+**gates de publicação** (testes de auditoria e verificação automática de
+fórmulas: qualquer falha impede a geração do painel), grava o manifesto de
+execução com hash por etapa e versiona o snapshot de sinais que habilita o
+indicador "sinais encerrados" na edição seguinte:
+
 ```bash
 pip install pandas duckdb pyarrow requests
+python3 scripts/00_atualizar.py                 # pipeline offline completo
+python3 scripts/00_atualizar.py --com-download  # inclui CVM, CNPJ e DataJud
+```
+
+Etapa a etapa (mesma ordem que o orquestrador):
+
+```bash
 python3 scripts/01_download.py             # ~170 MB da CVM + manifesto
 python3 scripts/02_build.py                # DuckDB + parquet
 python3 scripts/02b_build_series_classes.py
@@ -45,9 +58,10 @@ python3 scripts/12_monitor_rj.py            # recuperação judicial (DataJud + 
 python3 scripts/13_red_flags_v2.py          # 46 sinais em 8 pilares
 python3 scripts/14_lentes_exposicao.py      # nove lentes de exposição
 python3 scripts/15_matriz_fontes_schema.py  # matriz de fontes + schema changelog
+python3 scripts/18_backtest.py              # backtest dos sinais (+ tabela do MD)
 python3 scripts/16_painel_dados.py          # compila indicadores + evidências
+python3 scripts/20_teste_formulas.py        # GATE: reexecuta a fórmula de cada indicador
 python3 scripts/17_painel_v2.py             # renderiza o painel
-python3 scripts/18_backtest.py              # backtest dos sinais
 python3 scripts/19_dicionario_dados.py      # dicionário de dados
 ```
 

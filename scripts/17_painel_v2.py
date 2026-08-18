@@ -253,6 +253,18 @@ document.addEventListener('keydown', e=>{
 def main() -> int:
     with open(SRC, encoding="utf-8") as f:
         dados = json.load(f)
+    # resultado da verificação de fórmulas (etapa 20) entra como tabela do payload
+    vpath = os.path.join(ROOT, "data", "analytic", "verificacao_formulas.csv")
+    if os.path.exists(vpath):
+        import csv
+        with open(vpath, encoding="utf-8") as vf:
+            rd = list(csv.reader(vf))
+        dados["tabelas"]["verificacao"] = dict(
+            rotulo="Verificação automática de fórmulas",
+            fonte="execução própria (scripts/20_teste_formulas.py)",
+            campo="verificacao_formulas.csv", nota=None, colunas=rd[0],
+            unidades=["auto"] * len(rd[0]),
+            linhas=[[None if v == "" else v for v in r] for r in rd[1:]])
     payload = json.dumps(dados, ensure_ascii=False, separators=(",", ":"))
 
     body = """<title>Panorama FIDC Brasil</title>
@@ -262,8 +274,10 @@ def main() -> int:
   <div class="eyebrow">Mercado brasileiro de fundos de investimento em direitos creditórios</div>
   <h1>Panorama FIDC Brasil</h1>
   <p class="sub">Ferramenta de leitura e supervisão construída sobre fontes primárias da CVM.
-  Todo número é clicável e abre a evidência que o sustenta: fórmula, tabela de origem,
-  cobertura, status e nível de confiança.</p>
+  Cada indicador desta página abre, ao clique, a gaveta de evidência que o sustenta — fórmula,
+  tabela de origem, cobertura, status e nível de confiança; as tabelas declaram fonte e unidade
+  por coluna, e todo valor publicado passa por verificação automática de fórmula contra os
+  arquivos de origem.</p>
 </header>
 
 <nav role="tablist" aria-label="Seções">
@@ -272,6 +286,7 @@ def main() -> int:
   <button data-tab="t3" role="tab" aria-selected="false">3 · Exposição</button>
   <button data-tab="t4" role="tab" aria-selected="false">4 · Supervisão</button>
   <button data-tab="tf" role="tab" aria-selected="false">Ficha do veículo</button>
+  <button data-tab="te" role="tab" aria-selected="false">Raio-X da empresa</button>
   <button data-tab="t5" role="tab" aria-selected="false">5 · Judicial e regulatório</button>
   <button data-tab="t6" role="tab" aria-selected="false">6 · Auditoria e método</button>
 </nav>
@@ -295,6 +310,11 @@ def main() -> int:
     por recebíveis, não venda definitiva. É uma fatia relevante do estoque e muda a leitura
     de quem realmente carrega o risco.</p>
   </div></details>
+  <h2>O que mudou no mês</h2>
+  <p class="note">Fluxos e movimentos da competência do corte, e o giro da triagem de sinais.
+  "Sinais encerrados" ainda não é computável — exige o snapshot da publicação anterior, que o
+  orquestrador passou a versionar; o número existe a partir da próxima edição.</p>
+  <div class="tiles" id="tiles1b"></div>
   <h2>Estrutura de capital</h2>
   <p class="note">Quem absorve a primeira perda. Valor por tipo de série (tab X_2).</p>
   <div class="card" id="capital"></div>
@@ -379,6 +399,22 @@ def main() -> int:
   <div class="card" id="ficha"></div>
 </section>
 
+<!-- ================= EMPRESA ================= -->
+<section id="te" role="tabpanel" hidden>
+  <h2>Raio-X da empresa (cedente/originador)</h2>
+  <p class="note">Visão centrada na <strong>empresa</strong>: em quais veículos ela aparece como
+  cedente, com que recorrência histórica, e se há recuperação judicial ou falência documentada.
+  O valor é estoque <strong>atribuído</strong> de recebíveis originados — não é dívida da empresa
+  nem fluxo cedido — e a cobertura é um piso (só os 9 maiores cedentes de cada veículo são
+  públicos). Recuperação judicial não é evidência de irregularidade.</p>
+  <div class="toolbar">
+    <input type="search" id="qe" placeholder="razão social ou CNPJ…" aria-label="Buscar empresa"
+           style="min-width:320px">
+    <select id="esel" aria-label="Selecionar empresa"></select>
+  </div>
+  <div class="card" id="empresa"></div>
+</section>
+
 <!-- ================= TELA 5 ================= -->
 <section id="t5" role="tabpanel" hidden>
   <h2>Recuperação judicial e falência</h2>
@@ -406,6 +442,12 @@ def main() -> int:
   <p class="note">Testes executados sobre a base publicada. Verde: aprovado. Âmbar: ressalva
   documentada. O detalhe de cada teste aparece ao passar o mouse.</p>
   <div class="card" id="testes"></div>
+  <h2>Verificação automática de fórmulas</h2>
+  <p class="note">Cada indicador publicado é recomputado, de forma independente, a partir dos
+  arquivos de origem (<span class="mono">scripts/20_teste_formulas.py</span>). Divergência acima
+  de 0,1% — ou indicador sem verificador — reprova o build. Inclui o linter jurídico da tabela
+  de casos e a regra-mãe das fichas.</p>
+  <div class="card" id="verif"></div>
   <h2>Cobertura das fontes</h2>
   <div class="card" id="meta"></div>
   <details class="explain" open><summary>Limitações que não podem ser omitidas</summary><div class="b">
@@ -460,6 +502,11 @@ document.getElementById('box-julho').innerHTML = ja && jp
     `o que a distingue do atraso difuso normal. Totalizar sobre uma competência incompleta produziria ` +
     `queda aparente do mercado onde houve, entre os veículos que informaram nos dois meses, crescimento.`
   : '';
+
+document.getElementById('tiles1b').innerHTML =
+  ['var_1m','var_3m','var_6m','aquisicoes_mes','captacoes_mes','resgates_mes',
+   'mudou_entrantes','mudou_saintes','mudou_sinais_novos','mudou_sinais_persistentes',
+   'mudou_sinais_encerrados'].map(k=>tile(k)).join('');
 
 document.getElementById('capital').innerHTML = (function(){
   const s=['serie_senior','serie_mezanino','serie_subordinada'].map(ind).filter(Boolean);
@@ -537,6 +584,14 @@ document.getElementById('tiles5').innerHTML =
   function desenha(ix){
     const r = t.linhas[ix]; if(!r) return;
     const sig = r[col.sinais]||[];
+    // Regra-mãe: cobertura insuficiente NUNCA vira "nenhum sinal disparado".
+    const cob = col.cobertura_dados_pct!==undefined ? r[col.cobertura_dados_pct] : null;
+    const cobTxt = (cob===null||cob===undefined)? 'não avaliada' : nf.format(+(+cob).toFixed(1))+'% dos sinais avaliáveis';
+    const naoClassificavel = (cob===null||cob===undefined) || (+cob < 50);
+    const chipSinais = naoClassificavel
+      ? `<span class="chip na">cobertura insuficiente para concluir (${cobTxt})</span>`
+      : (sig.length? sig.map(x=>`<span class="chip warn">${x}</span>`).join(' ')
+                   : `<span class="chip ok">nenhum disparado (cobertura ${cobTxt})</span>`);
     document.getElementById('ficha').innerHTML =
       `<h3 style="font-size:17px;font-family:Georgia,serif;font-weight:400;margin:0 0 3px">${r[col.DENOM_SOCIAL]}</h3>
        <p class="note mono" style="margin:0 0 14px">CNPJ ${r[col.CNPJ]} · ${r[col.TP_FUNDO_CLASSE]}</p>
@@ -555,11 +610,58 @@ document.getElementById('tiles5').innerHTML =
        ${linha('Exclusivo', r[col.exclusivo]==='S'?'sim':(r[col.exclusivo]==='N'?'não':'—'))}
        ${linha('Cotistas de interesse único', r[col.interesse_unico]==='S'?'sim':(r[col.interesse_unico]==='N'?'não':'—'),
                'indica estrutura fechada em torno de um mesmo interesse econômico')}
-       ${linha('Sinais de atenção', sig.length? sig.map(x=>`<span class="chip warn">${x}</span>`).join(' ') : '<span class="chip ok">nenhum disparado</span>',
-               'sinal estatístico, não imputação de irregularidade')}
+       ${linha('Cobertura de dados', cobTxt,
+               'fração dos sinais da metodologia avaliável para este veículo — abaixo de 50% o veículo é NÃO CLASSIFICÁVEL')}
+       ${linha('Sinais de atenção', chipSinais,
+               naoClassificavel? 'cobertura insuficiente nunca é lida como baixo risco'
+                               : 'sinal estatístico, não imputação de irregularidade')}
        </tbody></table>`;
   }
   document.getElementById('qf').addEventListener('input', e=>opcoes(e.target.value));
+  sel.addEventListener('change', e=>desenha(+e.target.value));
+  opcoes('');
+})();
+// ---- raio-X da empresa ----
+(function(){
+  const t = D.tabelas.empresas; if(!t || !t.linhas.length) return;
+  const col = {}; t.colunas.forEach((c,i)=>col[c]=i);
+  const sel = document.getElementById('esel');
+  function linha(rot,val,nota){
+    return `<tr><td style="color:var(--ink2);width:38%">${rot}</td><td>${val}</td>
+      <td class="note" style="border:none;padding-top:7px">${nota||''}</td></tr>`;
+  }
+  function opcoes(q){
+    q=(q||'').trim().toLowerCase();
+    const lista = t.linhas.filter(r=> !q ||
+      String(r[col.razao_social]).toLowerCase().includes(q) || String(r[col.doc_cedente]).includes(q));
+    sel.innerHTML = lista.slice(0,100).map(r=>
+      `<option value="${t.linhas.indexOf(r)}">${r[col.razao_social]}</option>`).join('');
+    if(lista.length) desenha(t.linhas.indexOf(lista[0]));
+    else document.getElementById('empresa').innerHTML='<p class="note">Nenhuma empresa encontrada nesta seleção.</p>';
+  }
+  function desenha(ix){
+    const r = t.linhas[ix]; if(!r) return;
+    const veic = r[col.veiculos]||[];
+    const rj = r[col.status_judicial];
+    document.getElementById('empresa').innerHTML =
+      `<h3 style="font-size:17px;font-family:Georgia,serif;font-weight:400;margin:0 0 3px">${r[col.razao_social]}</h3>
+       <p class="note mono" style="margin:0 0 14px">CNPJ ${r[col.doc_cedente]} · ${r[col.cnae_principal]||'CNAE não resolvido'} · ${r[col.uf]||''}</p>
+       <table><tbody>
+       ${linha('Situação cadastral', r[col.situacao]||'—','base pública do CNPJ')}
+       ${linha('Estoque atribuído', fmtVal(r[col.exposicao_estimada],'R$'),'recebíveis originados presentes em carteiras de FIDC — não é dívida da empresa')}
+       ${linha('Veículos com a empresa como cedente', r[col.n_veiculos]===null?'—':nf.format(r[col.n_veiculos]),'entre os 9 maiores cedentes declarados por veículo')}
+       ${linha('Recorrência histórica', r[col.n_meses]===null||r[col.n_meses]===undefined?'—':nf.format(r[col.n_meses])+' competências',
+               (r[col.primeira]&&r[col.ultima])? 'primeira '+r[col.primeira]+' · última '+r[col.ultima] : '')}
+       ${linha('Recuperação judicial / falência', rj? `<span class="chip warn">${rj}</span>` : 'não identificada em fonte pública',
+               rj? 'marcador cadastral do art. 69 da Lei 11.101/2005 — NÃO é evidência de irregularidade'
+                 : 'ausência de marcador não prova inexistência de processo')}
+       ${linha('Também cotista corporativo de FIDC', r[col.cotista_corporativo]===true?'sim (demonstração financeira publicada)':'não identificado',
+               'papéis simultâneos (cedente e cotista) elevam a dependência corporativa do instrumento')}
+       ${linha('Principais veículos', veic.length? veic.map(v=>`<span class="chip">${v}</span>`).join(' ') : '—',
+               '% = participação declarada da empresa na carteira do veículo')}
+       </tbody></table>`;
+  }
+  document.getElementById('qe').addEventListener('input', e=>opcoes(e.target.value));
   sel.addEventListener('change', e=>desenha(+e.target.value));
   opcoes('');
 })();
@@ -568,6 +670,19 @@ renderTable('rj','rj');
 renderTable('casos','casos');
 document.getElementById('q5').addEventListener('input',e=>filterTables(e.target.value));
 
+(function(){
+  const t=D.tabelas.verificacao; const el=document.getElementById('verif');
+  if(!t||!t.linhas.length){ el.innerHTML='<p class="note">Verificação ainda não executada neste build.</p>'; return; }
+  const ix={i:t.colunas.indexOf('indicador'),s:t.colunas.indexOf('status'),
+            d:t.colunas.indexOf('diff_pct')};
+  const nOk = t.linhas.filter(r=>r[ix.s]==='OK').length;
+  el.innerHTML = `<p style="margin:0 0 9px"><strong>${nf.format(nOk)} de ${nf.format(t.linhas.length)}</strong> verificações aprovadas nesta execução.</p>`
+    + t.linhas.map(r=>{
+      const cls = r[ix.s]==='OK'?'ok':'crit';
+      const d = r[ix.d]===null||r[ix.d]===undefined? '' : ' · diff '+nf.format(+(+r[ix.d]).toFixed(4))+'%';
+      return `<span class="chip ${cls}" title="${r[ix.i]}${d}">${r[ix.i]}</span> `;
+    }).join('');
+})();
 (function(){
   const t=D.tabelas.testes; const el=document.getElementById('testes');
   if(!t||!t.linhas.length){ el.innerHTML='<p class="note">—</p>'; return; }

@@ -55,3 +55,52 @@ papéis. Nada disso foi reescrito: resistiu à auditoria e continua sob teste.
   **absolvidos em outras**.
 - Circularidade: o campo de cotas de FIDC-NP está **100% em branco** desde 2024;
   a medida usa apenas o campo de cotas de FIDC, e a lacuna passou a ser publicada.
+
+## Rodada 3 — resposta à revalidação do auditor-espelho (18/08/2026, noite)
+
+Veredito da revalidação: REPROVADO por margem estreita (média 7,5). Três
+bloqueantes, todos corrigidos nesta rodada, com o teste que impede reincidência:
+
+1. **Regra-mãe na Ficha do veículo.** 14 veículos não classificáveis (R$ 16 bi de
+   PL) exibiam chip verde "nenhum disparado". A ficha agora publica linha fixa
+   "Cobertura de dados" e, abaixo de 50%, chip neutro "cobertura insuficiente para
+   concluir" — nunca o vocabulário de conformidade. Teste: `regra_mae_fichas` em
+   `20_teste_formulas.py` (falha o build se ficha com cobertura < 50% não estiver
+   rotulada "não classificável").
+2. **Teste automático de fórmulas (a correção de classe).** `20_teste_formulas.py`
+   recomputa CADA indicador do painel a partir dos arquivos de origem; divergência
+   > 0,1% ou indicador sem verificador reprova o build. As fórmulas de
+   `rf_atencao_alta` (faltava "score > 0") e `rf_sem_sinal` (faltava
+   "cobertura ≥ 50%") foram corrigidas e agora reproduzem. 49/49 verificações OK.
+   O gate está no orquestrador `00_atualizar.py`: painel não é gerado com falha.
+3. **Regressão jurídica desfeita.** `descricao_irregularidade` voltou às colunas
+   publicadas (conduta + número do processo qualificam cada imputação); a linha do
+   termo de compromisso do PAS 19957.006858/2019-25 foi reescrita no padrão
+   agregado (sem "seu diretor"); o linter jurídico embutido na etapa 20 falha o
+   build se condenação aparecer sem processo visível ou se houver reidentificação
+   cargo+entidade. O linter pegou ainda dois casos que o espelho não listou
+   (Finaxis e Planner, "seu diretor responsável foi multado") — sanitizados.
+
+Não bloqueantes da mesma rodada, também fechados:
+
+- **Backtest**: tabela do `BACKTEST_RED_FLAGS.md` agora é regenerada pelo próprio
+  script entre marcadores (staleness CSV×MD eliminada como classe); publicadas as
+  DUAS colunas de antecedência (em 5 de 6 sinais os controles acendem antes — a
+  métrica mede posição na janela, não antecipação); pool de controle
+  descontaminado (positivos de qualquer evento excluídos de todos os controles —
+  0 positivos reutilizados).
+- **Lente 1 × lente 8**: cobertura da lente 1 publicada com 2 casas (99,99%), sem
+  arredondar para 100%.
+- **Lente 5**: as três coberturas nomeadas na ficha da lente (69,3% dos veículos;
+  79,7% do estoque de DC; 45,7% do estoque explicado pelas posições top-25).
+- **Subtítulo da capa** corrigido: não afirma mais que "todo número é clicável" —
+  descreve o que de fato existe (gaveta nos indicadores, unidade declarada por
+  coluna, verificação automática de fórmulas).
+
+Novos entregáveis do mandato nesta rodada: bloco "O que mudou no mês" (variações
+1/3/6m, aquisições/captações/resgates do mês, entrantes/saíntes, sinais novos ×
+persistentes; "encerrados" declarado não computável até existir snapshot
+anterior); aba "Raio-X da empresa" (cedente: exposição, recorrência, RJ, papel de
+cotista corporativo, veículos); orquestrador `00_atualizar.py` com manifesto de
+execução, gates de publicação e snapshot versionado de sinais; limitação do mapa
+de gravames documentada em `VALIDACAO_HUMANA_PENDENTE.md` (item 4.6).
