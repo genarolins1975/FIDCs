@@ -136,8 +136,14 @@ def main() -> int:
       SUM(p.VL_PL) pl_total,
       SUM(a.TAB_I2A_VL_DIRCRED_RISCO) dc_com_risco,
       SUM(a.TAB_I2B_VL_DIRCRED_SEM_RISCO) dc_sem_risco,
-      SUM(COALESCE(a.TAB_I2H_VL_COTA_FIDC,0)+COALESCE(a.TAB_I2I_VL_COTA_FIDC_NP,0)) cotas_fidc_detidas,
-      SUM(p.VL_PL) - SUM(COALESCE(a.TAB_I2H_VL_COTA_FIDC,0)+COALESCE(a.TAB_I2I_VL_COTA_FIDC_NP,0)) pl_liquido_circular,
+      -- I2I (cotas de FIDC-NP) está 100% em branco no layout desde 2024: a
+      -- circularidade medida vem de I2H. Somar nulo como zero seria afirmar
+      -- ausência; aqui a soma ignora nulos e a contagem de informantes é
+      -- publicada ao lado para tornar a lacuna visível.
+      SUM(a.TAB_I2H_VL_COTA_FIDC) cotas_fidc_detidas,
+      COUNT(a.TAB_I2H_VL_COTA_FIDC) n_informou_cotas_fidc,
+      COUNT(a.TAB_I2I_VL_COTA_FIDC_NP) n_informou_cotas_fidc_np,
+      SUM(p.VL_PL) - SUM(a.TAB_I2H_VL_COTA_FIDC) pl_liquido_circular,
       SUM(p.VL_PL) FILTER (a.FUNDO_EXCLUSIVO='S') pl_exclusivos,
       SUM(p.VL_PL) FILTER (a.COTST_INTERESSE='S') pl_cotistas_interesse_unico,
       SUM(a.TAB_I2A21_VL_TOTAL_PARCELA_INAD) parcelas_inad_com_risco,
@@ -247,10 +253,16 @@ def main() -> int:
     conc["hhi_veiculos"] = float((sh ** 2).sum())
     conc["share_top10_veiculos"] = float(sh.nlargest(10).sum())
     conc["share_top50_veiculos"] = float(sh.nlargest(50).sum())
-    sh_a = adm["pl"].clip(lower=0) / adm["pl"].clip(lower=0).sum()
+    # PL negativo é observação válida (veículo com passivo a descoberto), mas
+    # não pode entrar num índice de participação. Excluímos e reportamos.
+    adm_pos = adm[adm["pl"] > 0]
+    conc["n_administradores_pl_negativo_excluidos"] = int((adm["pl"] <= 0).sum())
+    sh_a = adm_pos["pl"] / adm_pos["pl"].sum()
     conc["hhi_administradores"] = float((sh_a ** 2).sum())
     conc["share_top5_administradores"] = float(sh_a.nlargest(5).sum())
-    sh_g = gest["pl"].clip(lower=0) / gest["pl"].clip(lower=0).sum()
+    gest_pos = gest[gest["pl"] > 0]
+    conc["n_gestores_pl_negativo_excluidos"] = int((gest["pl"] <= 0).sum())
+    sh_g = gest_pos["pl"] / gest_pos["pl"].sum()
     conc["hhi_gestores"] = float((sh_g ** 2).sum())
     conc["share_top5_gestores"] = float(sh_g.nlargest(5).sum())
     conc["cobertura_ranking_gestores"] = float(cobertura_gestor / pl_corte)

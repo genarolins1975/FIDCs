@@ -251,6 +251,28 @@ s.top1  / NULLIF(dc.dc_total, 0) AS top1_sobre_dc,
 
 ---
 
+## Nulo por omissão de reporte: a tab VIII está encolhendo
+
+Achado colateral da etapa 11, do mesmo gênero e com risco maior que qualquer
+`coalesce` do código: a cobertura da tabela VIII **cai de forma monotônica**.
+
+| Competência | Veículos no painel | Com tab VIII | % do DC coberto |
+|---|---:|---:|---:|
+| 2025-01-31 | 3.195 | 3.029 | 99,3% |
+| 2025-06-30 | 3.592 | 3.356 | 98,6% |
+| 2025-12-31 | 4.013 | 3.315 | 91,3% |
+| 2026-03-31 | 4.154 | 3.189 | 87,6% |
+| 2026-06-30 | 4.327 | 2.999 | **79,7%** |
+| 2026-07-31 | 4.206 | 2.563 | **74,6%** |
+
+O painel cresce e o número de informantes da tab VIII cai em termos absolutos
+(3.559 em nov/2025 → 2.999 em jun/2026). Um agregado de mercado de concentração
+de sacados construído por soma direta trataria os R$ 144,25 bi de direitos
+creditórios sem tab VIII (20,3% do total) como **zero de exposição a sacados** —
+o mesmo erro de categoria auditado acima, só que na fonte em vez do código. Por
+isso a etapa 11 publica a cobertura junto com todo indicador e não emite
+nenhum total de mercado de exposição por sacado.
+
 ## Recomendações, em ordem de materialidade
 
 1. **Corrigir 03_analytics.py L139-140** e republicar a série de

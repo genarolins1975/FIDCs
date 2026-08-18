@@ -2,8 +2,10 @@
 hhi_veiculos,0.007447741511548081
 share_top10_veiculos,0.18046803428314812
 share_top50_veiculos,0.33153094924656096
+n_administradores_pl_negativo_excluidos,0.0
 hhi_administradores,0.07544336837468867
 share_top5_administradores,0.5259932690207737
-hhi_gestores,0.020852106128045587
+n_gestores_pl_negativo_excluidos,6.0
+hhi_gestores,0.020852106128045583
 share_top5_gestores,0.24102790590383444
 cobertura_ranking_gestores,1.0000000000000009

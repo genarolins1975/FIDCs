@@ -50,7 +50,9 @@ def main() -> int:
     rank_fundos = (ext.groupby(["cnpj_investidor", "DENOM_SOCIAL"], as_index=False)
                    .agg(vl_cotas_fidc=("VL_MERC_POS_FINAL", "sum"),
                         n_fidcs_investidos=("cnpj_cota", "nunique"),
-                        n_posicoes_ligadas=("EMISSOR_LIGADO", lambda s: (s == "S").sum()))
+                        n_posicoes_ligadas=("EMISSOR_LIGADO", lambda s: (s == "S").sum()),
+                        n_posicoes_ligacao_nao_informada=("EMISSOR_LIGADO",
+                                                          lambda s: s.isna().sum()))
                    .sort_values("vl_cotas_fidc", ascending=False))
     rank_fundos.to_csv(f"{OUT}/detentores_cda_fundos.csv", index=False)
 
@@ -76,6 +78,7 @@ def main() -> int:
 
     # posições declaradas como emissor ligado (partes relacionadas na cadeia)
     ligadas = pos[pos.EMISSOR_LIGADO == "S"]
+    ligacao_desconhecida = pos[pos.EMISSOR_LIGADO.isna()]  # nulo ≠ "não ligado"
     resumo = pd.DataFrame([{
         "posicoes_cotas_fidc": len(pos),
         "vl_total_cotas_fidc_na_cda": pos.VL_MERC_POS_FINAL.sum(),
@@ -83,6 +86,8 @@ def main() -> int:
         "vl_detido_por_fidc_fic": pos[pos.investidor_e_fidc].VL_MERC_POS_FINAL.sum(),
         "vl_posicoes_emissor_ligado": ligadas.VL_MERC_POS_FINAL.sum(),
         "n_fundos_investidores": ext.cnpj_investidor.nunique(),
+        "vl_ligacao_nao_informada": ligacao_desconhecida.VL_MERC_POS_FINAL.sum(),
+        "n_posicoes_ligacao_nao_informada": len(ligacao_desconhecida),
     }])
     resumo.to_csv(f"{OUT}/detentores_cda_resumo.csv", index=False)
     print(resumo.T.to_string())
