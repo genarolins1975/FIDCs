@@ -1,0 +1,28 @@
+metrica,valor,unidade,observacao
+competencia_anterior,2026-06-30,data,
+competencia_ultima,2026-07-31,data,
+n_informantes_jun,4327,veículos,painel_saneado
+n_informantes_jul,4206,veículos,painel_saneado
+delta_informantes,-121,veículos,
+pl_jun,999497428095.1991,R$,
+pl_jul,950530392518.6005,R$,
+delta_pl,-48967035576.59863,R$,queda aparente do mercado
+delta_pl_pct,-0.048991657407181144,fração,
+n_ausentes_em_jul,232,veículos,informaram em jun e não em jul
+pl_ausentes_em_jul,73324035329.37,R$,PL de junho dos veículos que não informaram em julho
+pl_ausentes_pct_do_mercado_jun,0.0733609044588618,fração,
+dc_ausentes_em_jul,58744320618.72,R$,direitos creditórios (jun) dos ausentes
+n_novos_em_jul,111,veículos,informaram em jul e não em jun
+pl_novos_em_jul,5713171976.689998,R$,
+n_informantes_nos_dois_meses,4095,veículos,
+pl_same_store_jun,926173392765.8297,R$,só os que informaram nos 2 meses
+pl_same_store_jul,944817220541.9078,R$,só os que informaram nos 2 meses
+var_pl_same_store,0.020129953982376936,fração,"variação real do mercado, livre do efeito de ausência de reporte"
+mediana_sumidos_mes_a_mes_2024_2026,28.0,veículos,atrito normal em meses já consolidados
+mediana_pct_pl_sumido_mes_a_mes,0.0022564416094440864,fração,atrito normal em meses já consolidados
+razao_ausencias_jul_sobre_mediana,8.285714285714286,x,quantas vezes o atrito normal
+hhi_pl_ausente_por_administrador,0.5210665223809569,índice,0-1; alto = ausência concentrada em poucos administradores
+share_top1_admin_no_pl_ausente,0.707185863824518,fração,CBSF DISTRIBUIDORA DE TÍTULOS E VALORES MOBILIÁRIOS S.A.
+share_top5_admin_no_pl_ausente,0.9721380572967224,fração,
+ausentes_presentes_na_tabela_pl_bruta,0,veículos,"0 = a ausência é da fonte, não das regras de dedup do painel canônico"
+n_ausentes_em_liquidacao_ou_cancelado,63,veículos,motivo cadastral plausível para não informar
