@@ -1068,3 +1068,170 @@ item 2 — que é o único que impede a reincidência —, **aprovo com ressalva
 trabalho está a uma rodada curta disso.
 
 *Revalidação executada em 18/08/2026, 18:35–18:45 UTC, sobre o commit `8391baf`.*
+
+---
+
+# R.8 — Terceira passada (build de 18/08/2026 19:12 UTC) — veredito definitivo
+
+**Objeto:** commits `b6f91c3` (código/docs) e `68d782a` (artefatos via orquestrador).
+`painel_fidc_v2.html` md5 `8f4b7be1…`, `painel_dados.json` md5 `8c119ba0…`.
+Escopo: confirmar ou negar a resolução dos achados das passadas 1 e 2, mais os
+dois módulos novos (bloco "O que mudou no mês" e aba "Raio-X da empresa").
+
+## R.8.1 — Os três bloqueantes: verificação item a item
+
+**Bloqueante 1 (ficha × regra-mãe) — RESOLVIDO.** A tabela `fichas` agora carrega
+`cobertura_dados_pct`, `classificacao`, `score_risco`, `n_avaliaveis` e
+`n_disparos`. Cruzei as 400 fichas com `rf2_score_veiculo.csv`: **zero** fichas com
+cobertura < 50% fora de "não classificável". No navegador, EXPERT III (cobertura
+45,6%) exibe **chip neutro** `cobertura insuficiente para concluir (45,6% dos
+sinais avaliáveis)` — classe CSS `.chip.na`, cor `--neutral`, sem vocabulário de
+conformidade — e toda ficha tem a linha fixa "Cobertura de dados". Li o código
+gerado: o chip verde só é alcançável para veículo classificável, e mesmo então
+carrega a cobertura no texto (`nenhum disparado (cobertura X%)`). O teste
+`regra_mae_fichas` existe no gate e passou (400/0).
+
+**Bloqueante 2 (teste sistêmico de fórmulas) — RESOLVIDO.** `scripts/20_teste_formulas.py`
+é o teste que exigi: executei-o eu mesmo — **49/49 OK, exit 0** — e conferi o
+contrato no código: indicador sem verificador **falha o build** (verifiquei por
+diferença de conjuntos: os 47 indicadores do JSON têm verificador; os 2
+verificadores extras são os linters). O orquestrador `00_atualizar.py` encadeia
+05 e 20 como gates antes do 17 — o painel não é gerado se falharem. As fórmulas
+que não fechavam agora fecham: `rf_atencao_alta` declara *"CLASSIFICÁVEIS …
+COM ao menos um sinal disparado (score > 0)"* e `rf_sem_sinal` declara
+`COUNT(cobertura ≥ 50 E score = 0)` — ambas reproduzem 14 e 1.927. A divergência
+máxima nas 47 verificações é da ordem de 1e-13 (ruído de ponto flutuante).
+*Nota de desenho, não de falha:* os verificadores recomputam dos artefatos
+intermediários e do DuckDB, não do CSV bruto — é um gate de consistência, não uma
+reprodução independente. A reprodução independente do bruto é a que este parecer
+fez (18 indicadores, dif 0,000000%), e as duas camadas juntas cobrem o risco.
+
+**Bloqueante 3 (regressão jurídica) — RESOLVIDO.** `descricao_irregularidade`
+voltou às colunas publicadas. Verifiquei linha a linha na tela renderizada:
+**16 condenações**, todas com "cabe recurso ao CRSFN com efeito suspensivo" **e**
+com número de processo visível (inclusive o formato antigo `RJ2017/02029` no caso
+Trendbank). A antiga linha 5 foi reescrita no padrão agregado ("Proponentes de
+termo de compromisso no PAS CVM 19957.006858/2019-25 — 2 instituições e 2
+pessoa(s) natural(is), identificação … suprimida"), sem cargo. As sanitizações de
+Finaxis e Planner ("Pessoa natural também foi multada…") conferem — e registro a
+favor do processo que o linter jurídico pegou dois casos que **eu não havia
+listado**. Nenhuma ocorrência de "seu diretor"/"sua diretora" no HTML publicado.
+
+## R.8.2 — Não bloqueantes da rodada: verificação
+
+* **`BACKTEST_RED_FLAGS.md` regenerado entre marcadores — confirmado.** Conferi as
+  6 linhas da tabela contra `backtest_resumo.csv` célula a célula: taxas, lifts,
+  p-valores, não-avaliáveis e as **duas** colunas de antecedência — tudo bate
+  (S3 controles agora 28,4%, a linha mista morreu). Recalculei o Fisher unilateral
+  dos seis sinais: idêntico até a 4ª casa. A linha de leitura da antecedência que
+  pedi está publicada.
+* **Pool de controle descontaminado — confirmado.** Interseção entre CNPJs
+  positivos e controles, em todos os eventos: **0**. Restam 6 CNPJs que servem de
+  controle em **dois** eventos distintos (48 pares veículo-mês) — controle
+  compartilhado entre eventos é legítimo; sem objeção.
+* **Lente 1 — corrigido:** cobertura publicada 99,99%.
+* **Subtítulo — corrigido:** "Cada **indicador** desta página abre, ao clique, a
+  gaveta de evidência…" — afirmação agora verdadeira.
+* **Aba Auditoria** renderiza a tabela `verificacao` (49 linhas). Observação: a
+  tabela existe no HTML e não no `painel_dados.json` do disco — é injetada pelo
+  17 depois do gate 20, por desenho (o delta entre HTML e JSON é exatamente ela).
+  Aceitável; documentar.
+* **Módulos novos.** "O que mudou no mês": os 12 indicadores novos (var_1m/3m/6m,
+  aquisições/captações/resgates, entrantes/saíntes, sinais novos/persistentes)
+  passaram no gate; `mudou_sinais_encerrados` publicado como **nulo declarado**
+  ("não computável até haver snapshot") em vez de zero — exatamente a disciplina
+  certa, e o orquestrador versiona o snapshot que o tornará computável. "Raio-X da
+  empresa": 60 cedentes, nota adequada (estoque atribuído ≠ dívida; RJ ≠
+  irregularidade), CNPJ como string. Sete abas navegam; **zero erro de console**.
+
+## R.8.3 — Achado NOVO desta passada (a ressalva principal)
+
+**A "cobertura em valor" da lente 5 — o número que eu pedi — foi publicada
+errada: 62,5% onde o correto é 42,1%.**
+
+A ficha da lente 5 (tela 3) diz: *"as posições listadas (top-25 por veículo)
+explicam **62.5%** do estoque total de DC"*. Reproduzi a consulta de
+`14_lentes_exposicao.py:196`:
+
+```sql
+SUM(LEAST(s.top25, dc.v)) / SUM(dc.v)   -- s vem de LEFT JOIN
+```
+
+Em DuckDB, `LEAST(NULL, v)` **ignora o NULL e devolve `v`** (verifiquei:
+`SELECT LEAST(NULL, 5)` → `5`). Para os 1.328 veículos **sem** tab VIII, `s.top25`
+é NULL e o veículo entra no numerador **com o próprio DC inteiro** — ou seja, a
+carteira não observada é contada como observada. Prova aritmética:
+42,1% (correto) + 20,3% (DC dos não cobertos) = 62,5% (publicado), fecha exato.
+O valor correto de Σ LEAST(top25, dc) ÷ DC total é **0,4213**; sem o cap,
+Σ top25 ÷ DC = 0,4531 (meu 45,3% da 2ª passada). Registro ainda que a mensagem da
+coordenação citou "45,7%" — **três números em circulação para a mesma grandeza, e
+o publicado não é nenhum dos recalculáveis**.
+
+Duas lições que viram ressalvas: (i) a correção — `FILTER (s.CNPJ IS NOT NULL)`
+no numerador — é uma linha; (ii) mais importante, o número vive em **texto de
+nota**, fora de `indicadores`, e portanto **fora do alcance do gate 20**: é
+exatamente o ponto cego pelo qual o único número errado desta passada passou.
+
+## R.8.4 — Notas finais
+
+| # | Dimensão | 1ª | 2ª | **3ª** |
+|---|---|:---:|:---:|:---:|
+| 1 | Completude | 8 | 8 | **9** |
+| 2 | Precisão | 5 | 9 | **9** |
+| 3 | Rastreabilidade | 5 | 6 | **9** |
+| 4 | Consistência conceitual | 6 | 7 | **8** |
+| 5 | Reprodutibilidade | 7 | 7 | **9** |
+| 6 | Duplicidades | 9 | 9 | **9** |
+| 7 | Resolução de entidades | 6 | 8 | **8** |
+| 8 | Tratamento das limitações | 7 | 7 | **9** |
+| 9 | Clareza | 6 | 7 | **8** |
+| 10 | Utilidade econômica | 6 | 7 | **8** |
+
+**Média: 8,6** (era 6,5 → 7,5).
+
+## R.8.5 — VEREDITO DEFINITIVO
+
+# APROVADO COM RESSALVAS
+
+O critério que enunciei na revalidação — os três bloqueantes corrigidos **e** o
+teste automático de fórmulas implementado — foi cumprido, e cumprido de forma
+verificável: eu mesmo executei o gate (49/49), reproduzi a tabela do backtest
+célula a célula, cruzei as 400 fichas contra o score, li o código do chip e
+percorri as 16 condenações na tela. A camada de dados nunca esteve em questão
+(18 indicadores reproduzidos do bruto com diferença zero em três passadas); a
+camada de apresentação agora tem gate, orquestrador com ordem de dependência e
+linter jurídico — as três ausências estruturais que produziram os defeitos das
+passadas anteriores.
+
+**Ressalvas, em ordem de prioridade:**
+
+1. **[CORREÇÃO OBRIGATÓRIA na primeira reedição] O 62,5% da ficha da lente 5 está
+   errado; o correto é 42,1%** (bug `LEAST`/NULL, R.8.3). Uma linha de SQL. E
+   estender o gate 20 aos números embutidos em notas e fichas de lente — o único
+   erro desta passada viveu exatamente nesse ponto cego. Enquanto não corrigir,
+   qualquer leitura externa da lente 5 superestima em 20 p.p. o quanto do risco
+   de devedor é observável.
+2. **O gate é de consistência, não de reprodução independente**: os verificadores
+   partilham os artefatos intermediários com o compilador. Declarar isso no
+   cabeçalho do `verificacao_formulas.csv` e, idealmente, migrar 3-4 verificadores
+   âncora (pl_total, inadimplência, identidade contábil) para leitura direta do
+   CSV bruto.
+3. **Backtest**: pareamento por segmento/tipo de veículo pendente (o próprio MD o
+   declara); a biblioteca segue com um único evento robusto; se novos eventos
+   entrarem, a exclusão de positivos de todos os pools precisa ser regra do
+   código de ingestão de eventos, não do build atual (risco de recontaminação).
+4. **Lente 4**: cobertura em valor análoga à da lente 5 (piso de 29,4%) ainda sem
+   decomposição veículos × DC × valor explicado.
+5. **Cosméticos**: `false`/`None` de `cotista_corporativo`/`status_judicial`
+   renderizam como literais na aba Raio-X; o seletor da ficha lista 200 de 400
+   veículos sem aviso; CNPJ sem máscara `NN.NNN.NNN/NNNN-NN`; contraste do chip
+   âmbar 4,48 no tema claro (alvo 4,5); "encerrados" dependerá de disciplina de
+   snapshot entre edições.
+
+Nenhuma ressalva envolve número de capa, entidade nominada ou risco jurídico — a
+classe de defeito que motivou as duas reprovações está extinta neste build e, mais
+importante, tem agora contenção automática contra reincidência. O painel está apto
+a circular com a ressalva 1 corrigida na próxima regeneração.
+
+*Terceira passada executada em 18/08/2026, 19:13–19:25 UTC, sobre `68d782a`.
+Recálculo e testes: `auditoria/espelho_reconstrucao_recalc.py` (seção 3ª passada).*

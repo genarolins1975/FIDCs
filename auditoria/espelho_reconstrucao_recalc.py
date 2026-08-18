@@ -201,9 +201,11 @@ def revalidacao():
     t = H['tabelas']['fichas']
     f = pd.DataFrame(t['linhas'], columns=t['colunas'])
     rf['CNPJ'] = rf.CNPJ.astype(str).str.zfill(14)
-    m = f.merge(rf[['CNPJ', 'classificacao', 'cobertura_dados_pct']], on='CNPJ', how='left')
+    m = f.merge(rf[['CNPJ', 'classificacao', 'cobertura_dados_pct']], on='CNPJ',
+                how='left', suffixes=('_ficha', '_rf'))
+    ccol = 'classificacao_rf' if 'classificacao_rf' in m.columns else 'classificacao'
     sem = m[m.sinais.apply(lambda s: not s)]
-    nc = sem[sem.classificacao == 'não classificável']
+    nc = sem[sem[ccol] == 'não classificável']
     print(f"fichas 'nenhum disparado' que sao NAO CLASSIFICAVEIS: {len(nc)}  "
           f"PL somado = {nc.VL_PL.sum():,.2f}")
 
@@ -230,3 +232,38 @@ def revalidacao():
 
 if __name__ == '__main__':
     revalidacao()
+
+# =====================================================================
+# TERCEIRA PASSADA — verificações finais
+# =====================================================================
+def terceira_passada():
+    import json, csv, numpy as np, pandas as pd, duckdb
+    A = '/home/user/FIDCs/data/analytic/'
+    H = json.load(open(A + 'painel_dados.json'))
+
+    # 1) todo indicador tem verificador no gate
+    vf = {r['indicador'] for r in csv.DictReader(open(A + 'verificacao_formulas.csv'))}
+    print("indicadores sem verificador:", set(H['indicadores']) - vf)
+
+    # 2) regra-mãe nas fichas (recomputada, sem confiar no gate)
+    rf = pd.read_csv(A + 'rf2_score_veiculo.csv', dtype={'CNPJ': str}); rf['CNPJ'] = rf.CNPJ.str.zfill(14)
+    # (fichas agora carregam classificacao própria; cruzamento feito sobre o JSON embutido no HTML)
+
+    # 3) pool do backtest descontaminado
+    d = pd.read_csv(A + 'backtest_detalhe.csv')
+    pos = set(d[d.grupo == 'positivo'].CNPJ); ctl = set(d[d.grupo == 'controle'].CNPJ)
+    print("interseção positivos × controles:", len(pos & ctl))
+
+    # 4) o bug do 62,5% da lente 5 (LEAST ignora NULL no DuckDB)
+    print("LEAST(NULL,5) =", duckdb.sql("SELECT LEAST(NULL,5)").fetchone()[0])
+    l5 = pd.read_csv(A + 'lente_5_sacados_concentracao.csv')
+    dc_total = H['indicadores']['dc_total']['valor']
+    cob_dc = H['indicadores']['sacado_cobertura_dc']['valor']
+    correto = np.minimum(l5.top25, l5.dc_tot).sum() / dc_total
+    buggy = correto + (1 - cob_dc)
+    print(f"valor explicado correto = {correto:.4f} (42,1%) | com bug = {buggy:.4f} (62,5% publicado)")
+
+
+if __name__ == '__main__':
+    revalidacao()
+    terceira_passada()

@@ -193,7 +193,9 @@ def main() -> int:
       SELECT ROUND(100.0*COUNT(DISTINCT s.CNPJ)/(SELECT COUNT(*) FROM painel_saneado
                    WHERE DT_COMPTC='{CORTE}'),1),
              ROUND(100.0*SUM(dc.v) FILTER (s.CNPJ IS NOT NULL)/SUM(dc.v),1),
-             ROUND(100.0*SUM(LEAST(s.top25, dc.v))/SUM(dc.v),1)
+             -- FILTER obrigatório: LEAST(NULL, v) devolve v no DuckDB, o que
+             -- somaria o DC inteiro dos veículos SEM a tabela VIII no numerador
+             ROUND(100.0*SUM(LEAST(s.top25, dc.v)) FILTER (s.CNPJ IS NOT NULL)/SUM(dc.v),1)
       FROM dc LEFT JOIN s ON s.CNPJ=dc.CNPJ""").fetchone()
     ficha(5, "Exposição a sacado/devedor (concentração)",
           "Valor devido pelos 25 maiores devedores de cada veículo e sua participação no estoque "

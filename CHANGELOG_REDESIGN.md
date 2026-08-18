@@ -92,7 +92,8 @@ Não bloqueantes da mesma rodada, também fechados:
 - **Lente 1 × lente 8**: cobertura da lente 1 publicada com 2 casas (99,99%), sem
   arredondar para 100%.
 - **Lente 5**: as três coberturas nomeadas na ficha da lente (69,3% dos veículos;
-  79,7% do estoque de DC; 45,7% do estoque explicado pelas posições top-25).
+  79,7% do estoque de DC; e o estoque explicado pelas posições top-25 — ver
+  rodada 3.1 abaixo: o valor desta rodada saiu inflado por `LEAST(NULL, v)`).
 - **Subtítulo da capa** corrigido: não afirma mais que "todo número é clicável" —
   descreve o que de fato existe (gaveta nos indicadores, unidade declarada por
   coluna, verificação automática de fórmulas).
@@ -104,3 +105,23 @@ anterior); aba "Raio-X da empresa" (cedente: exposição, recorrência, RJ, pape
 cotista corporativo, veículos); orquestrador `00_atualizar.py` com manifesto de
 execução, gates de publicação e snapshot versionado de sinais; limitação do mapa
 de gravames documentada em `VALIDACAO_HUMANA_PENDENTE.md` (item 4.6).
+
+## Rodada 3.1 — ressalva obrigatória da aprovação (18/08/2026)
+
+Veredito da terceira passada do espelho: **APROVADO COM RESSALVAS** (média 8,6;
+era 6,5 → 7,5). Ressalva nº 1, corrigida nesta rodada:
+
+- **Cobertura em valor da lente 5**: publicada como 62,5%; o correto é **42,1%**.
+  Causa: `LEAST(NULL, v)` devolve `v` no DuckDB — os 1.328 veículos SEM tabela
+  VIII entravam no numerador com o DC inteiro. Corrigido com
+  `FILTER (s.CNPJ IS NOT NULL)`.
+- **Lição estrutural aplicada**: o número vivia em TEXTO de nota, fora do
+  alcance do gate de fórmulas — exatamente o ponto cego pelo qual o único erro
+  da passada atravessou. O gate 20 agora extrai e recomputa os números
+  embutidos na nota da lente 5 (`lente5_coberturas_na_nota`); 50/50
+  verificações OK.
+
+Ressalvas remanescentes declaradas (não corrigidas nesta rodada): gate verifica
+consistência contra artefatos intermediários, não reprodução do bruto (migrar
+verificadores âncora); pareamento por segmento no backtest; decomposição de
+cobertura em valor na lente 4; cosméticos de renderização no Raio-X da empresa.

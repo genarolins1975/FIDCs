@@ -253,6 +253,42 @@ def main() -> int:
                        recalculado=n_ficha_err, diff_pct=None,
                        status="OK" if n_ficha_err == 0 else "FALHA"))
 
+    # ---------------- números embutidos em notas (ponto cego da 3ª passada) ----------------
+    # O único erro que atravessou o gate vivia em TEXTO de nota, não em campo de
+    # valor. As três coberturas da lente 5 são extraídas da ficha publicada e
+    # recomputadas do zero — LEAST com FILTER, porque LEAST(NULL, v) = v no DuckDB.
+    lc = read("lentes_catalogo.csv")
+    l5row = lc[lc.lente == 5]
+    n_l5_err = 0
+    if len(l5row):
+        txt5 = str(l5row.iloc[0].get("limitacao", ""))
+        pcts = [float(x.replace(",", ".")) for x in re.findall(r"(\d+[.,]\d)%", txt5)][:3]
+        calc = con.execute(f"""
+          WITH dc AS (SELECT a.CNPJ,
+                 COALESCE(a.TAB_I2A_VL_DIRCRED_RISCO,0)+COALESCE(a.TAB_I2B_VL_DIRCRED_SEM_RISCO,0) v
+                 FROM ativo a JOIN painel_saneado p ON p.CNPJ=a.CNPJ AND p.DT_COMPTC=a.DT_COMPTC
+                 WHERE a.DT_COMPTC='{CORTE}'),
+          s AS (SELECT CNPJ, SUM(VALOR) top25 FROM sacados_conc
+                WHERE DT_COMPTC='{CORTE}' GROUP BY 1)
+          SELECT ROUND(100.0*COUNT(DISTINCT s.CNPJ)/(SELECT COUNT(*) FROM painel_saneado
+                       WHERE DT_COMPTC='{CORTE}'),1),
+                 ROUND(100.0*SUM(dc.v) FILTER (s.CNPJ IS NOT NULL)/SUM(dc.v),1),
+                 ROUND(100.0*SUM(LEAST(s.top25, dc.v)) FILTER (s.CNPJ IS NOT NULL)/SUM(dc.v),1)
+          FROM dc LEFT JOIN s ON s.CNPJ=dc.CNPJ""").fetchone()
+        if len(pcts) != 3:
+            n_l5_err = -1
+            falhas.append("lente 5: a nota não contém as três coberturas esperadas")
+        else:
+            for rot, pub, rec in zip(("veículos", "DC coberto", "valor explicado"),
+                                     pcts, calc):
+                if abs(pub - float(rec)) > 0.1:
+                    n_l5_err += 1
+                    falhas.append(f"lente 5 ({rot}): nota publica {pub}% "
+                                  f"recalculado {rec}%")
+    linhas.append(dict(indicador="lente5_coberturas_na_nota",
+                       publicado=len(l5row), recalculado=n_l5_err, diff_pct=None,
+                       status="OK" if n_l5_err == 0 else "FALHA"))
+
     df = pd.DataFrame(linhas)
     df.to_csv(os.path.join(OUT, "verificacao_formulas.csv"), index=False)
     n_ok = int((df.status == "OK").sum())
