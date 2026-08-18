@@ -71,6 +71,9 @@ UNIDADES = {
     "n_altos": "int", "posicoes_cotistas": "int", "n_cedentes_declarados": "int",
     "n_cot": "int", "n_meses": "int", "n_avaliaveis": "int", "n_disparos": "int",
     "n_veiculos_distintos": "int",
+    # identificadores: string mascarada NN.NNN.NNN/NNNN-NN no renderizador
+    "CNPJ": "cnpj", "cnpj": "cnpj", "doc_cedente": "cnpj",
+    "cnpj_se_conhecido": "cnpj", "CNPJ_ADMIN": "cnpj",
 }
 
 

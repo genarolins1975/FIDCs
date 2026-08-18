@@ -493,7 +493,11 @@ pontual para **prevenção de classe**:
   indicador publicado é recomputado a partir dos arquivos de origem; divergência
   acima de 0,1%, indicador sem verificador, condenação sem número de processo
   visível ou reidentificação de pessoa natural por cargo+entidade **reprovam o
-  build**. 49/49 verificações aprovadas nesta edição.
+  build**. 51/51 verificações aprovadas nesta edição — quatro delas por
+  verificadores-âncora que releem o CSV bruto da CVM e rederivam o painel
+  canônico com código independente, e duas sobre números embutidos em notas
+  (lentes 4 e 5), o ponto cego pelo qual o único erro da terceira passada
+  havia passado.
 - **Orquestrador com gates** (`scripts/00_atualizar.py`): pipeline em ordem
   única, manifesto de execução com hash por etapa, e a regra de que o painel não
   é regenerado se os testes de auditoria ou a verificação de fórmulas falharem.
@@ -505,9 +509,13 @@ pontual para **prevenção de classe**:
   concluir" em lugar do selo de ausência de sinal.
 
 O backtest ganhou higiene adicional: controles descontaminados (positivo de
-qualquer evento fica fora de todos os pools) e publicação das duas colunas de
-antecedência — em 5 dos 6 sinais os controles acendem antes dos positivos, o
-que confirma que a métrica descreve posição na janela, não antecipação.
+qualquer evento fica fora de todos os pools, agora como **invariante de
+código** — assertiva que aborta o build se violada), pareamento **por veículo**
+(mesmo tipo Fundo/Classe, PL entre 0,5x e 2x por positivo) e publicação das
+duas colunas de antecedência — em 5 dos 6 sinais os controles acendem antes
+dos positivos, o que confirma que a métrica descreve posição na janela, não
+antecipação. A troca do desenho de pareamento moveu os lifts em menos de 0,4 e
+não alterou quais sinais são significativos — evidência de robustez.
 
 ## 14. Limitações e agenda
 

@@ -1,15 +1,23 @@
 # BACKTEST_RED_FLAGS — os sinais estavam acesos antes do evento?
 
 Executado por `scripts/18_backtest.py` em 18/08/2026. Resultados brutos em
-`data/analytic/backtest_resumo.csv` e `backtest_detalhe.csv` (6.699 observações
+`data/analytic/backtest_resumo.csv` e `backtest_detalhe.csv` (6.164 observações
 veículo-mês).
 
 ## Desenho
 
 - **Casos positivos**: veículos ligados a eventos confirmados por fonte oficial
   (`casos_regulatorios.csv`), vinculados por **CNPJ do prestador** ou do fundo.
-- **Controles negativos**: veículos sem evento conhecido, pareados por faixa de
-  patrimônio na mesma competência, amostragem determinística.
+- **Controles negativos com pareamento POR VEÍCULO**: para cada positivo, até 3
+  controles do mesmo tipo (Fundo/Classe) com patrimônio entre 0,5x e 2x o do
+  positivo, na mesma competência, amostragem determinística. Pareamento por
+  variáveis de modelo de negócio (exclusivo, cotistas de interesse único) é
+  **deliberadamente evitado**: são os próprios sinais S5/S6 — parear por elas
+  absorveria o contraste que se quer medir.
+- **Higiene do controle como invariante de código**: veículo positivo em
+  QUALQUER evento da biblioteca fica fora de TODOS os pools de controle, e o
+  script **aborta** (assertiva) se a regra for violada — a garantia vale para
+  qualquer via futura de ingestão de eventos.
 - **Anti-vazamento**: para um evento em T, só se lê competência ≤ T−1 mês.
   Janela observada: 12 meses.
 - **Critério de disparo**: o veículo "acendeu" se o sinal apareceu em qualquer
@@ -21,17 +29,21 @@ veículo-mês).
 ## Resultado — CR023: liquidação extrajudicial do administrador (BCB, 15/01/2026)
 
 151 veículos administrados pela entidade na competência anterior ao evento;
-453 controles pareados.
+416 controles pareados por veículo (mesmo tipo, PL 0,5x–2x). Sob o pareamento
+anterior — faixa única global de PL — as conclusões eram as mesmas: a troca de
+desenho moveu os lifts em menos de 0,4 e não alterou quais sinais são
+significativos, o que é evidência de robustez do resultado ao critério de
+pareamento.
 
 <!-- BACKTEST:TABELA:INICIO -->
 | Sinal | Positivos | Controles | **Lift** | **Fisher (p)** | Não avaliáveis | Antecedência positivos | Antecedência controles |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| S5 — estrutura fechada (cotistas de interesse único) | 95,4% | 21,2% | **4,50** | **< 0,0001** | 0 | 4 m | 11 m |
-| S3 — subordinação abaixo de 5% | 83,3% | 28,4% | **2,94** | **< 0,0001** | 10 | 0 m | 5 m |
-| S1 — inadimplência ≈ zero com cedente concentrado | 27,6% | 15,5% | **1,77** | **0,033** | 353 | 2 m | 10 m |
-| S4 — variação abrupta de patrimônio | 42,3% | 35,9% | **1,18** | **0,098** | 23 | 8 m | 5 m |
-| S6 — cedente único acima de 80% | 30,5% | 44,7% | **0,68** | **0,984** | 326 | 1 m | 9 m |
-| S2 — rolagem (recompra + substituição) | 0,0% | 7,0% | **0,00** | **1,000** | 127 | — | 8 m |
+| S5 — estrutura fechada (cotistas de interesse único) | 95,4% | 21,4% | **4,46** | **< 0,0001** | 0 | 4 m | 11 m |
+| S3 — subordinação abaixo de 5% | 83,3% | 21,7% | **3,85** | **< 0,0001** | 6 | 0 m | 0 m |
+| S1 — inadimplência ≈ zero com cedente concentrado | 27,6% | 16,2% | **1,70** | **0,041** | 299 | 2 m | 10 m |
+| S4 — variação abrupta de patrimônio | 42,3% | 37,3% | **1,13** | **0,166** | 21 | 8 m | 6 m |
+| S6 — cedente único acima de 80% | 30,5% | 50,2% | **0,61** | **0,998** | 263 | 1 m | 8 m |
+| S2 — rolagem (recompra + substituição) | 0,0% | 8,0% | **0,00** | **1,000** | 96 | — | 7 m |
 
 Leitura obrigatória da antecedência: em 5 dos 6 sinais **os controles acendem mais cedo que os positivos** — a coluna mede em que ponto da janela de 12 meses o sinal costuma aparecer, **não** antecipação do evento. Nenhuma leitura preditiva é autorizada por ela.
 <!-- BACKTEST:TABELA:FIM -->
@@ -63,17 +75,17 @@ positivo de um evento serviria de "controle sem evento conhecido" para outro.
   a carteira do administrador liquidado era estruturalmente mais fechada e menos
   capitalizada em subordinação que o mercado comparável — e isso era observável
   em dado público meses antes da liquidação.
-- **S6 tem lift 0,68**: disparou *menos* nos casos positivos que nos controles.
+- **S6 tem lift 0,61**: disparou *menos* nos casos positivos que nos controles.
   Como sinal isolado de risco, é contraproducente neste evento. Mantê-lo com
   peso positivo num score agregado degradaria o resultado.
 - **S2 não disparou em nenhum positivo.** A rolagem de créditos, que é o
   mecanismo clássico de ocultação de atraso, não aparece neste caso — o que é
   coerente com o fato de o evento ter sido de natureza societária e de conduta
   do prestador, não de deterioração de carteira.
-- **Significância**: apenas S5, S3 (p < 0,0001) e S1 (p = 0,033) rejeitam a
+- **Significância**: apenas S5, S3 (p < 0,0001) e S1 (p = 0,041) rejeitam a
   hipótese de que positivos e controles disparam na mesma proporção. S4
-  (p = 0,098), S6 (p = 0,984) e S2 (p = 1,000) não rejeitam — e S6 e S2 apontam
-  na direção contrária. Publicar lift sem o p induziria a erro: um lift de 1,18
+  (p = 0,166), S6 (p = 0,998) e S2 (p = 1,000) não rejeitam — e S6 e S2 apontam
+  na direção contrária. Publicar lift sem o p induziria a erro: um lift de 1,13
   sobre 149 veículos não é distinguível de ruído.
 - **Cobertura desigual entre sinais**: S1 e S6 só foram avaliáveis para ~38% dos
   veículos (dependem de cedente declarado), enquanto S5 cobre 100%. Comparar
@@ -81,7 +93,7 @@ positivo de um evento serviria de "controle sem evento conhecido" para outro.
   taxa vale apenas contra o seu próprio grupo de controle.
 - **S1 é o único sinal com lastro documental externo**: no PAS CVM
   19957.006858/2019-25, a própria defesa atribuiu ao "reduzidíssimo histórico de
-  inadimplências" a demora na detecção. O lift de 1,77 é modesto, mas a
+  inadimplências" a demora na detecção. O lift de 1,70 é modesto, mas a
   cobertura é baixa (38%) — o sinal só é avaliável onde há cedente declarado.
 
 ## Falso negativo documentado — CR024: stop order (CVM, 20/05/2026)
@@ -103,8 +115,13 @@ CNPJ de prestador e vínculo societário documentado.
 1. **Um único evento com vínculo robusto.** Um caso não sustenta inferência
    estatística. Intervalos de confiança seriam largos a ponto de inúteis.
 2. **Confusão entre característica estrutural e precursor**, descrita acima.
-   Corrigir exige pareamento por segmento, tipo de veículo e público-alvo — não
-   apenas por faixa de patrimônio.
+   O pareamento por **tipo de veículo + faixa de PL por positivo** foi
+   implementado (e não mudou as conclusões); pareamento por **público-alvo e
+   segmento econômico da carteira** segue pendente — essas dimensões não são
+   diretamente observáveis no informe e exigiriam o registro ou classificação
+   própria. E permanece a advertência central: parear pelas variáveis que SÃO
+   os sinais (estrutura fechada, cedente único) eliminaria o contraste — parte
+   do confundimento é irredutível com um único evento.
 3. **Eventos históricos fora de alcance.** Os casos de 2012-2016 (Cruzeiro do
    Sul, Silverado) antecedem a existência de várias tabelas do informe: a de
    concentração de devedores começa em 2025, os campos de cedente em nov/2019.

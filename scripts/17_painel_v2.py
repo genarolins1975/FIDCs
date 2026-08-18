@@ -27,7 +27,7 @@ CSS = """
   --bg:#F4F4F0; --surface:#FFF; --surface2:#FAFAF7; --ink:#181F27; --ink2:#525C68;
   --muted:#8A929C; --line:#DFE1DA; --grid:#E9EAE4;
   --s1:#0E7A55; --s2:#4460C7; --s3:#B26312; --s4:#7A5AA8;
-  --ok:#0E7A55; --warn:#B26312; --crit:#A32C2C; --neutral:#6E7681;
+  --ok:#0E7A55; --warn:#A05910; --crit:#A32C2C; --neutral:#6E7681;
   --tipbg:#181F27; --tipink:#F4F4F0;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
@@ -139,6 +139,11 @@ function fmtVal(v, unidade, dec){
   if(unidade==='%') return nf.format(+(v*100).toFixed(dec??1))+'%';
   return nf.format(+v.toFixed(dec??0));
 }
+function fmtCNPJ(v){
+  const d = String(v??'').replace(/\D/g,'');
+  if(d.length!==14) return String(v??'—');
+  return d.slice(0,2)+'.'+d.slice(2,5)+'.'+d.slice(5,8)+'/'+d.slice(8,12)+'-'+d.slice(12);
+}
 function ind(key){ return D.indicadores[key] || null; }
 // número com gaveta de evidência
 function ev(key, dec){
@@ -180,6 +185,7 @@ function isNum(v){ return typeof v === 'number' && isFinite(v); }
 // adivinhar escala produziu erro de 100x na versão anterior.
 function cellFmt(col, v, unidade){
   if(v===null||v===undefined||v==='') return '—';
+  if(unidade==='cnpj') return '<span class="mono">'+fmtCNPJ(v)+'</span>';
   if(!isNum(v)) return String(v);
   switch(unidade){
     case 'brl':   return fmtVal(v,'R$');
@@ -445,8 +451,13 @@ def main() -> int:
   <h2>Verificação automática de fórmulas</h2>
   <p class="note">Cada indicador publicado é recomputado, de forma independente, a partir dos
   arquivos de origem (<span class="mono">scripts/20_teste_formulas.py</span>). Divergência acima
-  de 0,1% — ou indicador sem verificador — reprova o build. Inclui o linter jurídico da tabela
-  de casos e a regra-mãe das fichas.</p>
+  de 0,1% — ou indicador sem verificador — reprova o build. Quatro verificadores-âncora
+  (patrimônio, contagem de veículos, inadimplência e identidade contábil) releem o CSV
+  BRUTO da CVM e rederivam o painel canônico com código independente; os demais verificam
+  consistência contra os artefatos intermediários (coluna <span class="mono">base</span>).
+  Inclui o linter jurídico da tabela de casos, a regra-mãe das fichas e os números embutidos
+  nas notas das lentes 4 e 5. Esta tabela é injetada no HTML pelo gerador DEPOIS do gate —
+  é, por desenho, o único conteúdo do HTML que não consta de painel_dados.json.</p>
   <div class="card" id="verif"></div>
   <h2>Cobertura das fontes</h2>
   <div class="card" id="meta"></div>
@@ -570,7 +581,7 @@ document.getElementById('tiles5').innerHTML =
     q=(q||'').trim().toLowerCase();
     const lista = t.linhas.filter(r=> !q ||
       String(r[col.DENOM_SOCIAL]).toLowerCase().includes(q) || String(r[col.CNPJ]).includes(q));
-    sel.innerHTML = lista.slice(0,200).map((r,i)=>
+    sel.innerHTML = lista.map((r,i)=>
       `<option value="${t.linhas.indexOf(r)}">${r[col.DENOM_SOCIAL]}</option>`).join('');
     if(lista.length) desenha(t.linhas.indexOf(lista[0]));
     else document.getElementById('ficha').innerHTML='<p class="note">Nenhum veículo encontrado nesta seleção.</p>';
@@ -594,7 +605,7 @@ document.getElementById('tiles5').innerHTML =
                    : `<span class="chip ok">nenhum disparado (cobertura ${cobTxt})</span>`);
     document.getElementById('ficha').innerHTML =
       `<h3 style="font-size:17px;font-family:Georgia,serif;font-weight:400;margin:0 0 3px">${r[col.DENOM_SOCIAL]}</h3>
-       <p class="note mono" style="margin:0 0 14px">CNPJ ${r[col.CNPJ]} · ${r[col.TP_FUNDO_CLASSE]}</p>
+       <p class="note mono" style="margin:0 0 14px">CNPJ ${fmtCNPJ(r[col.CNPJ])} · ${r[col.TP_FUNDO_CLASSE]}</p>
        <table><tbody>
        ${linha('Patrimônio líquido', brl(r[col.VL_PL]))}
        ${linha('Administrador fiduciário', r[col.ADMIN]||'—','não assume o risco de crédito da carteira')}
@@ -645,7 +656,7 @@ document.getElementById('tiles5').innerHTML =
     const rj = r[col.status_judicial];
     document.getElementById('empresa').innerHTML =
       `<h3 style="font-size:17px;font-family:Georgia,serif;font-weight:400;margin:0 0 3px">${r[col.razao_social]}</h3>
-       <p class="note mono" style="margin:0 0 14px">CNPJ ${r[col.doc_cedente]} · ${r[col.cnae_principal]||'CNAE não resolvido'} · ${r[col.uf]||''}</p>
+       <p class="note mono" style="margin:0 0 14px">CNPJ ${fmtCNPJ(r[col.doc_cedente])} · ${r[col.cnae_principal]||'CNAE não resolvido'} · ${r[col.uf]||''}</p>
        <table><tbody>
        ${linha('Situação cadastral', r[col.situacao]||'—','base pública do CNPJ')}
        ${linha('Estoque atribuído', fmtVal(r[col.exposicao_estimada],'R$'),'recebíveis originados presentes em carteiras de FIDC — não é dívida da empresa')}

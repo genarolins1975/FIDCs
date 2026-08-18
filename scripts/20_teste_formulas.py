@@ -16,6 +16,16 @@ Regras:
   4. Indicador com valor nulo declarado (ex.: "Dados insuficientes") é
      verificado como nulo — o verificador devolve None e ambos devem coincidir.
 
+Natureza da verificação (coluna `base` do CSV de saída):
+  - "bruto": verificadores-ÂNCORA que releem o CSV bruto de data/raw/ e
+    rederivam o painel canônico com código independente (regras de dedup
+    reimplementadas aqui, sem consultar o DuckDB). Cobrem pl_total,
+    n_veiculos, inadimplencia e identidade_contabil.
+  - "intermediário": verificadores que recomputam a partir dos artefatos de
+    data/analytic/ e do DuckDB. Detectam inconsistência entre camadas, mas
+    partilham a linhagem de build com o compilador — não são reprodução
+    independente do dado de origem.
+
 Também executa o LINTER JURÍDICO da tabela de casos (regra do manual):
   - linha com status contendo "condena" precisa exibir número de processo;
   - nenhum texto publicado pode reidentificar pessoa natural por cargo +
@@ -40,6 +50,50 @@ CORTE = "2026-06-30"
 
 def read(name, **kw):
     return pd.read_csv(os.path.join(OUT, name), **kw)
+
+
+RAW = os.path.join(ROOT, "data", "raw", "extracted")
+
+
+def read_raw(name):
+    """CSV bruto da CVM: latin-1, ';', aspas desbalanceadas (quoting=3)."""
+    return pd.read_csv(os.path.join(RAW, name), sep=";", encoding="latin-1",
+                       quoting=3, dtype=str)
+
+
+def _num(s):
+    return pd.to_numeric(s.astype(str).str.strip().replace({"": None, "nan": None}),
+                         errors="coerce")
+
+
+def _cnpj(s):
+    return s.astype(str).str.replace(r"\D", "", regex=True)
+
+
+def painel_canonico_do_bruto(comp="202606"):
+    """Rederiva o painel canônico DIRETO do CSV bruto, sem consultar o DuckDB.
+
+    Reimplementação independente das duas regras de dedup do build:
+      (i) mesmo CNPJ como Fundo e Classe na competência -> mantém a Classe;
+      (ii) Fundo cujas classes informam separadamente -> excluído (o mapa
+           fundo->classe vem do registro RCVM 175, também lido do bruto).
+    Devolve DataFrame com CNPJ, TP_FUNDO_CLASSE e VL_PL.
+    """
+    iv = read_raw(f"inf_mensal_fidc_tab_IV_{comp}.csv")
+    iv["CNPJ"] = _cnpj(iv.CNPJ_FUNDO_CLASSE)
+    iv["VL_PL"] = _num(iv.TAB_IV_A_VL_PL)
+    iv["ord"] = (iv.TP_FUNDO_CLASSE != "Classe").astype(int)
+    iv1 = iv.sort_values("ord").drop_duplicates(subset=["CNPJ"], keep="first")
+    rc = read_raw("registro_classe.csv")
+    rf = read_raw("registro_fundo.csv")
+    mapa = rc[["ID_Registro_Fundo", "CNPJ_Classe"]].merge(
+        rf[["ID_Registro_Fundo", "CNPJ_Fundo"]], on="ID_Registro_Fundo")
+    mapa["cc"], mapa["cf"] = _cnpj(mapa.CNPJ_Classe), _cnpj(mapa.CNPJ_Fundo)
+    mapa = mapa[(mapa.cc != "") & (mapa.cf != "") & (mapa.cc != mapa.cf)]
+    fundos_com_classe = set(mapa[mapa.cc.isin(set(iv.CNPJ))].cf)
+    pan = iv1[~((iv1.TP_FUNDO_CLASSE == "Fundo")
+                & iv1.CNPJ.isin(fundos_com_classe))].copy()
+    return pan
 
 
 def main() -> int:
@@ -70,9 +124,41 @@ def main() -> int:
         com = rf2_cl[rf2_cl.score_risco > 0]
         return int((com.score_risco >= np.percentile(com.score_risco, 99)).sum())
 
+    # ------- verificadores-ÂNCORA: releitura direta do CSV bruto -------
+    pan_bruto = painel_canonico_do_bruto()
+    canon = set(pan_bruto.CNPJ)
+
+    def anc_inadimplencia():
+        v = read_raw("inf_mensal_fidc_tab_V_202606.csv")
+        w = read_raw("inf_mensal_fidc_tab_VI_202606.csv")
+        for df_ in (v, w):
+            df_["CNPJ"] = _cnpj(df_.CNPJ_FUNDO_CLASSE)
+        v, w = v[v.CNPJ.isin(canon)], w[w.CNPJ.isin(canon)]
+        dc = _num(v.TAB_V_A_VL_DIRCRED_PRAZO).sum() + _num(w.TAB_VI_A_VL_DIRCRED_PRAZO).sum()
+        inad = _num(v.TAB_V_B_VL_DIRCRED_INAD).sum() + _num(w.TAB_VI_B_VL_DIRCRED_INAD).sum()
+        return inad / dc
+
+    def anc_identidade():
+        i = read_raw("inf_mensal_fidc_tab_I_202606.csv")
+        iii = read_raw("inf_mensal_fidc_tab_III_202606.csv")
+        i["CNPJ"], iii["CNPJ"] = _cnpj(i.CNPJ_FUNDO_CLASSE), _cnpj(iii.CNPJ_FUNDO_CLASSE)
+        m = (pan_bruto[["CNPJ", "VL_PL"]]
+             .merge(i.groupby("CNPJ", as_index=False)
+                    .agg(ativo=("TAB_I_VL_ATIVO", lambda x: _num(x).iloc[-1])), on="CNPJ")
+             .merge(iii.groupby("CNPJ", as_index=False)
+                    .agg(passivo=("TAB_III_VL_PASSIVO", lambda x: _num(x).iloc[-1])), on="CNPJ"))
+        m = m.dropna(subset=["ativo", "passivo", "VL_PL"])
+        return int((abs(m.ativo - m.passivo - m.VL_PL) > 0.01).sum())
+
+    ANCORAS = {"pl_total", "n_veiculos", "inadimplencia", "identidade_contabil"}
+
     VERIF = {
+        # --- âncoras: rederivadas do CSV bruto (não do DuckDB) ---
+        "pl_total": lambda: float(pan_bruto.VL_PL.sum()),
+        "n_veiculos": lambda: len(pan_bruto),
+        "inadimplencia": anc_inadimplencia,
+        "identidade_contabil": anc_identidade,
         # --- tela 1: estoque, contagens e variações ---
-        "pl_total": lambda: q1(f"SELECT SUM(VL_PL) FROM painel_saneado WHERE DT_COMPTC='{CORTE}'"),
         "circularidade": lambda: q1(f"""SELECT SUM(a.TAB_I2H_VL_COTA_FIDC) FROM ativo a
             JOIN painel_saneado p ON p.CNPJ=a.CNPJ AND p.DT_COMPTC=a.DT_COMPTC
             WHERE a.DT_COMPTC='{CORTE}'"""),
@@ -80,7 +166,6 @@ def main() -> int:
             FROM ativo a JOIN painel_saneado x ON x.CNPJ=a.CNPJ AND x.DT_COMPTC=a.DT_COMPTC
             WHERE a.DT_COMPTC='{CORTE}')
             FROM painel_saneado p WHERE p.DT_COMPTC='{CORTE}'"""),
-        "n_veiculos": lambda: q1(f"SELECT COUNT(*) FROM painel_saneado WHERE DT_COMPTC='{CORTE}'"),
         "posicoes_cotistas": lambda: q1(f"""SELECT SUM(c.TAB_X_NR_COTST) FROM cotistas_serie c
             JOIN painel_saneado p ON p.CNPJ=c.CNPJ AND p.DT_COMPTC=c.DT_COMPTC
             WHERE c.DT_COMPTC='{CORTE}'"""),
@@ -118,8 +203,6 @@ def main() -> int:
         "mudou_sinais_persistentes": lambda: int((rfs.meses_consecutivos > 1).sum()),
         "mudou_sinais_encerrados": lambda: None,  # declarado "Dados insuficientes"
         # --- crédito ---
-        "inadimplencia": lambda: (agc.inad_com_risco + agc.inad_sem_risco)
-        / (agc.dc_com_risco + agc.dc_sem_risco),
         "atraso_180": lambda: (agc.v_maior_180 + agc.vi_maior_180)
         / (agc.dc_com_risco + agc.dc_sem_risco),
         "provisionamento": lambda: q1(f"""
@@ -147,7 +230,6 @@ def main() -> int:
             sdet[sdet.top1_sobre_dc.notna()].top1_sobre_dc.median()),
         "sacado_n_top1_50": lambda: int((sdet.top1_sobre_dc > 0.50).sum()),
         # --- integridade e desempenho ---
-        "identidade_contabil": lambda: float(read("identidade_contabil.csv").iloc[0].n_divergentes),
         "series_abaixo_esperado": lambda: float(
             read("desempenho_resumo.csv").iloc[0].n_series_abaixo_do_esperado),
         "veiculos_com_garantia": lambda: float(
@@ -186,13 +268,14 @@ def main() -> int:
     for k, fn in VERIF.items():
         if k not in IND:
             continue
+        base_v = "bruto" if k in ANCORAS else "intermediário"
         pub = IND[k]["valor"]
         try:
             rec = fn()
         except Exception as e:
             falhas.append(f"{k}: verificador quebrou ({e})")
             linhas.append(dict(indicador=k, publicado=pub, recalculado=None,
-                               diff_pct=None, status="ERRO"))
+                               diff_pct=None, base=base_v, status="ERRO"))
             continue
         if pub is None and rec is None:
             ok, diff = True, 0.0
@@ -207,7 +290,7 @@ def main() -> int:
             falhas.append(f"{k}: publicado={pub} recalculado={rec} diff={diff}")
         linhas.append(dict(indicador=k, publicado=pub,
                            recalculado=None if rec is None else float(rec),
-                           diff_pct=diff, status="OK" if ok else "FALHA"))
+                           diff_pct=diff, base=base_v, status="OK" if ok else "FALHA"))
 
     # ---------------- linter jurídico da tabela de casos ----------------
     casos = dados["tabelas"].get("casos", {})
@@ -231,7 +314,7 @@ def main() -> int:
             falhas.append("LINTER: pessoa natural publicada por cargo sem agregação")
             n_lint += 1
     linhas.append(dict(indicador="linter_juridico_casos", publicado=len(casos.get("linhas", [])),
-                       recalculado=n_lint, diff_pct=None,
+                       recalculado=n_lint, diff_pct=None, base="intermediário",
                        status="OK" if n_lint == 0 else "FALHA"))
 
     # ---------------- regra-mãe nas fichas ----------------
@@ -250,7 +333,7 @@ def main() -> int:
     if n_ficha_err > 0:
         falhas.append(f"{n_ficha_err} ficha(s) com cobertura<50% sem rótulo 'não classificável'")
     linhas.append(dict(indicador="regra_mae_fichas", publicado=len(fichas.get("linhas", [])),
-                       recalculado=n_ficha_err, diff_pct=None,
+                       recalculado=n_ficha_err, diff_pct=None, base="intermediário",
                        status="OK" if n_ficha_err == 0 else "FALHA"))
 
     # ---------------- números embutidos em notas (ponto cego da 3ª passada) ----------------
@@ -287,7 +370,40 @@ def main() -> int:
                                   f"recalculado {rec}%")
     linhas.append(dict(indicador="lente5_coberturas_na_nota",
                        publicado=len(l5row), recalculado=n_l5_err, diff_pct=None,
-                       status="OK" if n_l5_err == 0 else "FALHA"))
+                       base="intermediário", status="OK" if n_l5_err == 0 else "FALHA"))
+
+    # lente 4: mesma decomposição (veículos × DC dos cobertos × valor explicado)
+    l4row = lc[lc.lente == 4]
+    n_l4_err = 0
+    if len(l4row):
+        txt4 = str(l4row.iloc[0].get("limitacao", ""))
+        pcts4 = [float(x.replace(",", ".")) for x in re.findall(r"(\d+[.,]\d)%", txt4)][:3]
+        ced_cob = read("cedentes_cobertura.csv").iloc[0]
+        calc4 = con.execute(f"""
+          WITH dc AS (SELECT a.CNPJ,
+                 COALESCE(a.TAB_I2A_VL_DIRCRED_RISCO,0)+COALESCE(a.TAB_I2B_VL_DIRCRED_SEM_RISCO,0) v
+                 FROM ativo a JOIN painel_saneado p ON p.CNPJ=a.CNPJ AND p.DT_COMPTC=a.DT_COMPTC
+                 WHERE a.DT_COMPTC='{CORTE}'),
+          cd AS (SELECT DISTINCT CNPJ FROM cedentes
+                 WHERE DT_COMPTC='{CORTE}' AND PR_CEDENTE > 0 AND PR_CEDENTE <= 100)
+          SELECT ROUND(100.0*COUNT(DISTINCT cd.CNPJ)/(SELECT COUNT(*) FROM painel_saneado
+                       WHERE DT_COMPTC='{CORTE}'),1),
+                 ROUND(100.0*SUM(dc.v) FILTER (cd.CNPJ IS NOT NULL)/SUM(dc.v),1)
+          FROM dc LEFT JOIN cd ON cd.CNPJ=dc.CNPJ""").fetchone()
+        esper4 = [float(calc4[0]), float(calc4[1]),
+                  round(100 * float(ced_cob.cobertura_top9), 1)]
+        if len(pcts4) != 3:
+            n_l4_err = -1
+            falhas.append("lente 4: a nota não contém as três coberturas esperadas")
+        else:
+            for rot, pub, rec in zip(("veículos", "DC coberto", "valor explicado"),
+                                     pcts4, esper4):
+                if abs(pub - rec) > 0.1:
+                    n_l4_err += 1
+                    falhas.append(f"lente 4 ({rot}): nota publica {pub}% recalculado {rec}%")
+    linhas.append(dict(indicador="lente4_coberturas_na_nota",
+                       publicado=len(l4row), recalculado=n_l4_err, diff_pct=None,
+                       base="intermediário", status="OK" if n_l4_err == 0 else "FALHA"))
 
     df = pd.DataFrame(linhas)
     df.to_csv(os.path.join(OUT, "verificacao_formulas.csv"), index=False)

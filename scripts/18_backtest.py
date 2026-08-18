@@ -9,10 +9,12 @@ Desenho:
     (liquidação BCB, PAS julgado, stop order), de `casos_regulatorios.csv`.
     O vínculo é feito por CNPJ do prestador (administrador/gestor) ou do
     próprio fundo, nunca por semelhança de nome.
-  - Controles negativos: veículos sem evento conhecido, pareados por faixa de
-    PL e competência, amostrados com semente fixa. Veículos positivos em
-    QUALQUER evento da biblioteca são excluídos de TODOS os pools de controle —
-    sem isso, um positivo de um evento contaminaria o controle de outro.
+  - Controles negativos: pareamento POR VEÍCULO — para cada positivo, até 3
+    controles do mesmo tipo (Fundo/Classe) com PL entre 0,5x e 2x, na mesma
+    competência, amostrados com semente fixa. Veículos positivos em QUALQUER
+    evento da biblioteca são excluídos de TODOS os pools de controle (invariante
+    verificada por assertiva: o script aborta se violada). Pareamento por
+    exclusivo/interesse único é evitado de propósito: são os próprios sinais.
   - Anti-vazamento: para um evento em T, só se lê informação de competências
     ≤ T−1 mês. Nenhum sinal usa dado posterior ao evento.
   - Métricas: taxa de disparo em positivos (sensibilidade aparente), taxa em
@@ -226,17 +228,33 @@ def main() -> int:
                                observacao="nenhum veículo vinculado na competência anterior"))
             continue
 
-        # controles negativos pareados por faixa de PL, sem evento conhecido
-        # (exclui positivos de QUALQUER evento, não só deste)
-        ctrl = [r[0] for r in con.execute(f"""
-            WITH faixa AS (
-              SELECT MIN(VL_PL) lo, MAX(VL_PL) hi FROM painel_saneado
-              WHERE DT_COMPTC='{ref}' AND CNPJ IN ('{"','".join(alvo)}'))
-            SELECT p.CNPJ FROM painel_saneado p, faixa f
-            WHERE p.DT_COMPTC='{ref}'
-              AND p.CNPJ NOT IN ('{"','".join(positivos_todos)}')
-              AND p.VL_PL BETWEEN f.lo AND f.hi
-            ORDER BY hash(p.CNPJ || '{ev["caso"]}') LIMIT {max(len(alvo)*3, 30)}""").fetchall()]
+        # Controles negativos com PAREAMENTO POR VEÍCULO: para cada positivo,
+        # até 3 controles do MESMO tipo (Fundo/Classe) com PL entre 0,5x e 2x o
+        # do positivo — não mais uma única faixa global de PL. Exclui positivos
+        # de QUALQUER evento e amostra deterministicamente (hash com semente do
+        # caso). Pareamento por variáveis de modelo de negócio (exclusivo,
+        # interesse único) é deliberadamente EVITADO: essas variáveis são os
+        # próprios sinais S5/S6 — parear por elas absorveria o contraste.
+        cand = con.execute(f"""
+            SELECT CNPJ, VL_PL, TP_FUNDO_CLASSE,
+                   hash(CNPJ || '{ev["caso"]}') h
+            FROM painel_saneado
+            WHERE DT_COMPTC='{ref}'
+              AND CNPJ NOT IN ('{"','".join(positivos_todos)}')
+            ORDER BY h""").df()
+        pos_info = con.execute(f"""
+            SELECT CNPJ, VL_PL, TP_FUNDO_CLASSE FROM painel_saneado
+            WHERE DT_COMPTC='{ref}' AND CNPJ IN ('{"','".join(alvo)}')
+            ORDER BY CNPJ""").df()
+        usados, ctrl = set(), []
+        for pv in pos_info.itertuples():
+            m = cand[(cand.TP_FUNDO_CLASSE == pv.TP_FUNDO_CLASSE)
+                     & (cand.VL_PL >= 0.5 * (pv.VL_PL or 0))
+                     & (cand.VL_PL <= 2.0 * (pv.VL_PL or 1))
+                     & ~cand.CNPJ.isin(usados)]
+            take = m.CNPJ.head(3).tolist()
+            usados.update(take)
+            ctrl.extend(take)
 
         for grupo, cnpjs in (("positivo", alvo), ("controle", ctrl)):
             for comp in comps:
@@ -284,6 +302,16 @@ def main() -> int:
         return round(p, 4)
 
     det_all = pd.concat(linhas, ignore_index=True) if linhas else pd.DataFrame()
+    # INVARIANTE (não removível): nenhum CNPJ positivo em QUALQUER evento pode
+    # aparecer como controle em NENHUM evento. A regra vale para qualquer via
+    # futura de ingestão de eventos — se falhar aqui, o backtest não publica.
+    if len(det_all):
+        contaminados = set(det_all[det_all.grupo == "positivo"].CNPJ) \
+            & set(det_all[det_all.grupo == "controle"].CNPJ)
+        if contaminados:
+            raise AssertionError(
+                f"controle contaminado por {len(contaminados)} positivo(s): "
+                f"{sorted(contaminados)[:5]}...")
     det_all.to_csv(f"{OUT}/backtest_detalhe.csv", index=False)
     res = pd.DataFrame(resumo)
     # lift = taxa em positivos ÷ taxa em controles

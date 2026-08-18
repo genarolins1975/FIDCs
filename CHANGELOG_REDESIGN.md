@@ -125,3 +125,36 @@ Ressalvas remanescentes declaradas (não corrigidas nesta rodada): gate verifica
 consistência contra artefatos intermediários, não reprodução do bruto (migrar
 verificadores âncora); pareamento por segmento no backtest; decomposição de
 cobertura em valor na lente 4; cosméticos de renderização no Raio-X da empresa.
+
+## Rodada 4 — fechamento das ressalvas 2-5 do parecer R.8 (18/08/2026)
+
+Com a ressalva 1 já resolvida na rodada 3.1, esta rodada fecha as demais:
+
+- **R2 — verificadores-âncora do bruto.** `20_teste_formulas.py` agora rederiva
+  o painel canônico DIRETO do CSV bruto da CVM (tab IV + registro RCVM 175, com
+  as regras de dedup reimplementadas de forma independente, sem consultar o
+  DuckDB) e verifica por essa via `pl_total`, `n_veiculos`, `inadimplencia` e
+  `identidade_contabil`. A coluna `base` do `verificacao_formulas.csv` declara a
+  natureza de cada verificação ("bruto" × "intermediário"), e a distinção está
+  documentada no cabeçalho do script e na aba Auditoria do painel.
+- **R3 — backtest com pareamento por veículo.** Controles agora são pareados
+  positivo a positivo: mesmo tipo (Fundo/Classe), PL entre 0,5x e 2x, até 3 por
+  positivo, semente determinística. Resultado robusto ao desenho: lifts moveram
+  menos de 0,4 e a partição significativo/não-significativo não mudou (S5 4,46 /
+  S3 3,85 / S1 1,70 vs S4 1,13 / S6 0,61 / S2 0,00). A descontaminação virou
+  INVARIANTE de código: assertiva aborta o build se qualquer positivo aparecer
+  como controle, valendo para qualquer via futura de ingestão de eventos.
+  Pareamento por público-alvo/segmento econômico segue declarado como pendente
+  (não observável no informe); parear pelas variáveis que são os próprios
+  sinais continua deliberadamente evitado.
+- **R4 — lente 4 decomposta.** A ficha da lente publica as três coberturas no
+  mesmo formato da lente 5 (% de veículos que declaram cedente × % do DC nesses
+  veículos × % do estoque explicado pelo top-9 = 29,4%), e o gate recomputa as
+  três (`lente4_coberturas_na_nota`). 51/51 verificações OK.
+- **R5 — cosméticos.** CNPJ mascarado `NN.NNN.NNN/NNNN-NN` em fichas, Raio-X e
+  tabelas (unidade `cnpj` declarada por coluna); seletor da ficha lista os 400
+  veículos (era 200 sem aviso); chip âmbar escurecido para `#A05910` no tema
+  claro (contraste 4,84–5,34 nas três superfícies; era 4,48); varredura
+  automatizada das 60 empresas do Raio-X sem literais `false`/`None`/`NaN`.
+  O delta HTML×JSON (tabela de verificação injetada após o gate) está
+  documentado na própria aba Auditoria.

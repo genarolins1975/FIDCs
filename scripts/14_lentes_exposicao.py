@@ -134,6 +134,21 @@ def main() -> int:
     l4 = pd.read_csv(f"{OUT}/cedentes_ranking_nomes.csv", dtype={"doc_cedente": str})
     cob_ced = pd.read_csv(f"{OUT}/cedentes_cobertura.csv").iloc[0]
     l4.to_csv(f"{OUT}/lente_4_cedentes.csv", index=False)
+    # Decomposição da cobertura no mesmo formato da lente 5 (veículos × DC dos
+    # cobertos × valor explicado) — sem ela, o piso de 29,4% parece uma única
+    # cobertura quando são três grandezas distintas.
+    cob4_veic, cob4_dc = con.execute(f"""
+      WITH dc AS (SELECT a.CNPJ,
+             COALESCE(a.TAB_I2A_VL_DIRCRED_RISCO,0)+COALESCE(a.TAB_I2B_VL_DIRCRED_SEM_RISCO,0) v
+             FROM ativo a JOIN painel_saneado p ON p.CNPJ=a.CNPJ AND p.DT_COMPTC=a.DT_COMPTC
+             WHERE a.DT_COMPTC='{CORTE}'),
+      cd AS (SELECT DISTINCT CNPJ FROM cedentes
+             WHERE DT_COMPTC='{CORTE}' AND PR_CEDENTE > 0 AND PR_CEDENTE <= 100)
+      SELECT ROUND(100.0*COUNT(DISTINCT cd.CNPJ)/(SELECT COUNT(*) FROM painel_saneado
+                   WHERE DT_COMPTC='{CORTE}'),1),
+             ROUND(100.0*SUM(dc.v) FILTER (cd.CNPJ IS NOT NULL)/SUM(dc.v),1)
+      FROM dc LEFT JOIN cd ON cd.CNPJ=dc.CNPJ""").fetchone()
+    cob4_valor = round(100 * float(cob_ced.cobertura_top9), 1)
     ficha(4, "Exposição a cedente/originador",
           "Estoque de direitos creditórios atribuível a cada cedente, pelo percentual declarado "
           "no informe (apenas os 9 maiores cedentes de cada veículo).",
@@ -142,8 +157,11 @@ def main() -> int:
           "NÃO é fluxo cedido no período nem dívida da empresa: é o saldo de recebíveis originados "
           "por ela que está na carteira dos fundos. NÃO é ranking completo — é piso.",
           "CVM: informe mensal tab I (campos de cedente) + base pública do CNPJ",
-          round(100 * float(cob_ced.cobertura_top9), 1), len(l4),
-          "Cobertura de 29,4% do estoque; cauda além do top-9 não observável; CPFs não resolvidos.")
+          cob4_valor, len(l4),
+          f"Três coberturas, três definições: {cob4_veic}% dos veículos do corte declaram ao "
+          f"menos um cedente; esses veículos carregam {cob4_dc}% do estoque de DC; os percentuais "
+          f"declarados (top-9 por veículo) explicam {cob4_valor}% do estoque total de DC — a "
+          "cauda além do top-9 não é observável. CPFs não resolvidos (contados, nunca nominados).")
 
     # ---------- Lente 5: exposição a sacado/devedor (tab VIII) ----------
     # Concentração dos 25 maiores devedores; SEM identificador do sacado.
