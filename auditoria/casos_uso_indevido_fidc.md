@@ -47,12 +47,25 @@ caso a caso.
 - Mecanismo: **lastro inexistente** cedido a FIDC cativo — o fundo compra
   "crédito" que não existe e devolve caixa ao originador.
 
-### 1.4 Silverado / FIDCs Maximum, Maximum II e Petro (2010s; julgado 2024)
-- Rombo estimado de R$ 560 mi; CVM multou a gestora (Florim, ex-Silverado) e
-  seu ex-diretor em **R$ 244,9 mi cada** (2024) por operação fraudulenta;
-  área técnica apontou "relação estreita entre cedentes e gestora" (vedada).
-- Mecanismo: duplicatas sem lastro/"frias" e cedentes ligados ao gestor;
-  reprecificação abrupta após anos de cotas estáveis.
+### 1.4 Silverado / FIDCs Maximum, Maximum II e Petro — PAS CVM 19957.006858/2019-25
+- **Identificação confirmada em fonte primária**: este é o processo indicado
+  como caso de estudo obrigatório. Julgado em **15/10/2024**, relatoria do
+  Presidente. Nove acusados. Gestora e seu diretor: **R$ 244.979.397,58 cada**.
+  Prestadores: BNY Mellon R$ 1,2 mi; Gradual (massa falida) R$ 1,7 mi;
+  Santander Caceis R$ 2,72 mi; Deutsche Bank R$ 500 mil; três diretores pessoa
+  física somando R$ 1,87 mi. Fatos concentrados em 2014-2016; termo de
+  compromisso rejeitado em 16/03/2021.
+- **Ressalva obrigatória de leitura**: praticamente todos os prestadores foram
+  **condenados em algumas imputações e absolvidos em outras**. Publicar apenas
+  a condenação distorce o ato oficial.
+- Mecanismo apurado: duplicatas sem lastro e cedentes ligados à gestora. Os
+  critérios de seleção usados pela área técnica (sócios e endereços comuns
+  entre cedentes; duplicatas não reconhecidas por sacados em circularização;
+  participação individual elevada; inadimplência que só apareceu depois da
+  retirada do rating) coincidem com os sinais desta triagem. A própria defesa
+  atribuiu ao **"reduzidíssimo histórico de inadimplências"** a demora na
+  detecção — é o lastro documental do sinal "inadimplência ≈ zero com cedente
+  concentrado".
 
 ### 1.5 Trendbank / FIDC Multisetorial (2010s)
 - Força-tarefa Greenfield denunciou 13 pessoas (gestão temerária/fraudulenta,
@@ -60,9 +73,13 @@ caso a caso.
   transferir valores de cotistas ao próprio grupo; multas ao gestor.
 
 ### 1.6 Union National FIDC Financeiros e Mercantis / FIDC Agro (2010s)
-- Insolvência ocultada; CVM multou o auditor (KPMG, R$ 1 mi) por parecer sem
-  ressalvas apesar de sinais de alerta, e o administrador (Oliveira Trust,
-  R$ 1 mi) por falha de diligência.
+- **Correção de versão anterior** (verificação em fonte primária pela trilha
+  regulatória): foram **dois** processos distintos, com valores superiores aos
+  antes registrados. PAS RJ2013/5456 (julgado em 20/10/2015): administrador
+  (Oliveira Trust) condenado a **três multas de R$ 1 mi, total R$ 3 mi**, e o
+  **custodiante (Bradesco) a R$ 1,5 mi**. PAS RJ2013/9762 (29/09/2015): auditor
+  (KPMG) multado em **R$ 1 mi** (o dobro do teto ordinário) e seu sócio técnico
+  em R$ 200 mil.
 - Mecanismo: cadeia de gatekeepers falhando em conjunto (auditor,
   administrador, custodiante) — precedente de responsabilização de prestadores.
 

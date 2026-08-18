@@ -74,8 +74,13 @@ CLASSES = {
     108: "Falência de Empresários, Sociedades Empresárias, ME e EPP",
 }
 MESES = 24
-PAGE = 1000          # tamanho de página do search_after
-MAX_POR_TRIBUNAL = 20000
+PAGE = 1000          # tamanho de página (from/size)
+# O índice só permite from+size <= 10000 e o único campo ordenável é
+# dataAjuizamento (fielddata está desabilitada em _id, id e numeroProcesso, de
+# modo que search_after com desempate estável não é possível). Por isso a coleta
+# é fatiada por classe e por trimestre, mantendo cada fatia bem abaixo do teto.
+MAX_WINDOW = 10000
+MESES_POR_FATIA = 3
 
 # Colunas contratuais — emitidas mesmo quando não há dado, para não quebrar o pipeline.
 COLS_PROC = [
@@ -115,55 +120,96 @@ def _janela() -> tuple[str, str]:
     return ini.strftime("%Y%m%d000000"), hoje.strftime("%Y%m%d235959")
 
 
-def consulta_tribunal(trib: str, ses: requests.Session) -> list[dict]:
-    """Baixa todos os processos de RJ/falência do tribunal na janela, via search_after."""
+def _fatias() -> list[tuple[str, str]]:
+    """Divide a janela de MESES em blocos de MESES_POR_FATIA meses."""
     gte, lte = _janela()
-    query = {
-        "size": PAGE,
-        "query": {
-            "bool": {
-                "must": [{"terms": {"classe.codigo": list(CLASSES)}}],
-                "filter": [{"range": {"dataAjuizamento": {"gte": gte, "lte": lte}}}],
-            }
-        },
-        "sort": [{"dataAjuizamento": {"order": "asc"}}, {"_id": {"order": "asc"}}],
-    }
-    docs: list[dict] = []
-    after = None
-    while len(docs) < MAX_POR_TRIBUNAL:
-        body = dict(query)
-        if after:
-            body["search_after"] = after
+    ini = datetime.strptime(gte, "%Y%m%d%H%M%S")
+    fim = datetime.strptime(lte, "%Y%m%d%H%M%S")
+    out, cur = [], ini
+    while cur < fim:
+        prox = min(cur + timedelta(days=int(MESES_POR_FATIA * 30.44)), fim)
+        out.append((cur.strftime("%Y%m%d000000"), prox.strftime("%Y%m%d235959")))
+        cur = prox + timedelta(days=1)
+    return out
+
+
+def _busca(trib: str, ses: requests.Session, classe: int,
+           gte: str, lte: str) -> list[dict]:
+    """Pagina uma fatia (classe x período) por from/size."""
+    docs, frm = [], 0
+    while frm < MAX_WINDOW:
+        body = {
+            "from": frm, "size": min(PAGE, MAX_WINDOW - frm),
+            "query": {
+                "bool": {
+                    "must": [{"match": {"classe.codigo": classe}}],
+                    "filter": [{"range": {"dataAjuizamento": {"gte": gte, "lte": lte}}}],
+                }
+            },
+            "sort": [{"dataAjuizamento": {"order": "asc"}}],
+        }
         r = ses.post(BASE.format(trib=trib), headers=_headers(), json=body, timeout=120)
         r.raise_for_status()
-        hits = r.json().get("hits", {}).get("hits", [])
-        if not hits:
-            break
+        j = r.json()
+        hits = j.get("hits", {}).get("hits", [])
+        if frm == 0:
+            total = j.get("hits", {}).get("total", {}).get("value", 0)
+            if total >= MAX_WINDOW:
+                log.warning("%s classe %d %s..%s: %d processos excedem a janela de "
+                            "%d do Elasticsearch — resultado TRUNCADO",
+                            trib.upper(), classe, gte[:6], lte[:6], total, MAX_WINDOW)
         docs.extend(h["_source"] for h in hits)
-        after = hits[-1].get("sort")
-        if len(hits) < PAGE or not after:
+        if len(hits) < min(PAGE, MAX_WINDOW - frm):
             break
+        frm += len(hits)
+    return docs
+
+
+def consulta_tribunal(trib: str, ses: requests.Session) -> list[dict]:
+    """Baixa os processos de RJ/falência do tribunal na janela, fatiando por classe e período."""
+    vistos, docs = set(), []
+    for classe in CLASSES:
+        for gte, lte in _fatias():
+            for d in _busca(trib, ses, classe, gte, lte):
+                if d.get("id") in vistos:
+                    continue
+                vistos.add(d.get("id"))
+                docs.append(d)
     log.info("%s: %d processos baixados", trib.upper(), len(docs))
     return docs
+
+
+def _achata(v) -> list[dict]:
+    """Achata campos que ora vêm como dict, ora como lista, ora como lista de listas."""
+    out = []
+    pilha = [v]
+    while pilha:
+        x = pilha.pop()
+        if isinstance(x, dict):
+            out.append(x)
+        elif isinstance(x, (list, tuple)):
+            pilha.extend(x)
+    return out
 
 
 def normaliza(docs: list[dict]) -> pd.DataFrame:
     linhas = []
     for d in docs:
-        movs = d.get("movimentos") or []
-        ult = max(movs, key=lambda m: m.get("dataHora", ""), default={})
-        oj = d.get("orgaoJulgador") or {}
+        movs = _achata(d.get("movimentos"))
+        ult = max(movs, key=lambda m: str(m.get("dataHora", "")), default={})
+        oj = d.get("orgaoJulgador")
+        oj = (_achata(oj) or [{}])[0]
         linhas.append({
             "tribunal": d.get("tribunal"),
             "grau": d.get("grau"),
             "numero_processo": d.get("numeroProcesso"),
-            "classe_codigo": (d.get("classe") or {}).get("codigo"),
-            "classe_nome": (d.get("classe") or {}).get("nome"),
+            "classe_codigo": (_achata(d.get("classe")) or [{}])[0].get("codigo"),
+            "classe_nome": (_achata(d.get("classe")) or [{}])[0].get("nome"),
             "data_ajuizamento": d.get("dataAjuizamento"),
             "orgao_julgador": oj.get("nome"),
             "municipio_ibge": oj.get("codigoMunicipioIBGE"),
             "assuntos": "; ".join(
-                str(a.get("nome")) for a in (d.get("assuntos") or []) if a.get("nome")
+                str(a.get("nome")) for a in _achata(d.get("assuntos")) if a.get("nome")
             ),
             "n_movimentos": len(movs),
             "ultimo_movimento": ult.get("nome"),
@@ -197,6 +243,44 @@ def classifica_papel(natureza: str, no_ranking: bool) -> str:
     return "FIDC com exposição a cedente em RJ" if no_ranking else "relação apenas hipotética"
 
 
+def _universo_cedentes() -> pd.DataFrame:
+    """
+    Universo de cedentes CNPJ com razão social resolvida.
+
+    Usa o ranking completo de cedentes (cedentes_ranking_estimado.csv) enriquecido
+    com o cache de consultas ao cadastro CNPJ (cnpj_cache.json), e não apenas o
+    top-150 de cedentes_ranking_nomes.csv — de modo que empresas de exposição
+    menor, mas em RJ, também sejam detectadas.
+    """
+    p_est = os.path.join(OUT, "cedentes_ranking_estimado.csv")
+    p_cache = os.path.join(ROOT, "data", "cnpj_cache.json")
+    p_nomes = os.path.join(OUT, "cedentes_ranking_nomes.csv")
+
+    if os.path.exists(p_est) and os.path.exists(p_cache):
+        rank = pd.read_csv(p_est, dtype={"doc_cedente": str})
+        with open(p_cache, encoding="utf-8") as fh:
+            cache = json.load(fh)
+        nomes = pd.DataFrame.from_dict(cache, orient="index")
+        nomes.index.name = "doc_cedente"
+        nomes = nomes.reset_index()[
+            [c for c in ("doc_cedente", "razao_social", "situacao", "uf") if c in nomes.columns]
+        ]
+        rank = rank.merge(nomes, on="doc_cedente", how="left")
+    elif os.path.exists(p_nomes):
+        rank = pd.read_csv(p_nomes, dtype={"doc_cedente": str})
+    else:
+        return pd.DataFrame()
+
+    rank = rank[rank["doc_cedente"].str.len() == 14].copy()
+    if "razao_social" not in rank.columns:
+        rank["razao_social"] = ""
+    rank["razao_social"] = rank["razao_social"].fillna("")
+    n_res = int((rank["razao_social"] != "").sum())
+    log.info("universo de cedentes: %d CNPJs, %d com razão social resolvida (%.0f%%)",
+             len(rank), n_res, 100 * n_res / max(len(rank), 1))
+    return rank
+
+
 def casa_por_cnpj() -> pd.DataFrame:
     """
     Casa empresas em RJ/falência com cedentes de FIDC EXCLUSIVAMENTE por CNPJ.
@@ -210,20 +294,16 @@ def casa_por_cnpj() -> pd.DataFrame:
     como "correspondência por nome, requer validação humana" e o vínculo NÃO é
     afirmado.
     """
-    p_rank = os.path.join(OUT, "cedentes_ranking_nomes.csv")
-    if not os.path.exists(p_rank):
-        log.warning("ranking de cedentes ausente (%s) — sem casamento", p_rank)
+    rank = _universo_cedentes()
+    if rank.empty:
+        log.warning("universo de cedentes indisponível — sem casamento")
         return pd.DataFrame(columns=COLS_MATCH)
-
-    rank = pd.read_csv(p_rank, dtype={"doc_cedente": str})
-    rank = rank[rank["doc_cedente"].str.len() == 14].copy()
-    rank["razao_social"] = rank["razao_social"].fillna("")
 
     linhas = []
 
     # --- Trilha A: marcador de RJ na própria razão social do cadastro CNPJ ---
     marca = rank["razao_social"].str.upper().str.contains(
-        r"EM RECUPERA(C|Ç)(A|Ã)O JUDICIAL|MASSA FALIDA|EM FAL(E|Ê)NCIA", regex=True, na=False
+        r"EM RECUPERA[CÇ][AÃ]O JUDICIAL|MASSA FALIDA|EM FAL[EÊ]NCIA", regex=True, na=False
     )
     for _, r in rank[marca].iterrows():
         falida = "MASSA FALIDA" in r["razao_social"].upper()
