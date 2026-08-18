@@ -402,6 +402,74 @@ def main() -> int:
            "Testes de auditoria", "execução própria sobre a base publicada",
            "scripts/05_testes_auditoria.py", None, limite=40)
 
+    # ---------------- fichas individuais (raio-X do veículo) ----------------
+    # Universo: os 400 maiores por PL + todos os que disparam sinal, para que a
+    # busca cubra tanto o topo do mercado quanto os casos de atenção.
+    import duckdb as _dd
+    con = _dd.connect(os.path.join(ROOT, "data", "duckdb", "fidc.db"), read_only=True)
+    fichas = con.execute(f"""
+    WITH base AS (
+      SELECT p.CNPJ, p.DENOM_SOCIAL, p.VL_PL, p.TP_FUNDO_CLASSE,
+             a.ADMIN, a.CNPJ_ADMIN, a.FUNDO_EXCLUSIVO, a.COTST_INTERESSE,
+             a.TAB_I2A_VL_DIRCRED_RISCO dc_a, a.TAB_I2B_VL_DIRCRED_SEM_RISCO dc_b,
+             a.TAB_I2A11_VL_REDUCAO_RECUP prov_a
+      FROM painel_saneado p
+      LEFT JOIN ativo a ON a.CNPJ=p.CNPJ AND a.DT_COMPTC=p.DT_COMPTC
+      WHERE p.DT_COMPTC='{CORTE}'),
+    ge AS (
+      SELECT regexp_replace(rc.CNPJ_Classe,'\\D','','g') cnpj, MAX(rf.Gestor) gestor
+      FROM registro_classe rc JOIN registro_fundo rf USING (ID_Registro_Fundo) GROUP BY 1),
+    inad AS (
+      SELECT CNPJ, TAB_V_A_VL_DIRCRED_PRAZO dcv, TAB_V_B_VL_DIRCRED_INAD inadv
+      FROM dc_risco_prazos WHERE DT_COMPTC='{CORTE}'),
+    sub AS (
+      SELECT CNPJ, SUM(VL_SERIE) FILTER (TIPO_COTA IN ('subordinada','mezanino')) vsub,
+             SUM(VL_SERIE) vtot
+      FROM series_cotas WHERE DT_COMPTC='{CORTE}' GROUP BY 1),
+    sac AS (
+      SELECT CNPJ, MAX(VALOR) FILTER (SEQUENCIAL='1') maior_sacado
+      FROM sacados_conc WHERE DT_COMPTC='{CORTE}' GROUP BY 1),
+    ced AS (
+      SELECT CNPJ, MAX(PR_CEDENTE) pr_max, COUNT(*) n_ced FROM cedentes
+      WHERE DT_COMPTC='{CORTE}' AND PR_CEDENTE > 0 AND PR_CEDENTE <= 100 GROUP BY 1),
+    cot AS (SELECT CNPJ, SUM(TAB_X_NR_COTST) n_cot FROM cotistas_serie
+            WHERE DT_COMPTC='{CORTE}' GROUP BY 1)
+    SELECT b.DENOM_SOCIAL, b.CNPJ, b.TP_FUNDO_CLASSE, b.VL_PL, b.ADMIN, g.gestor,
+           COALESCE(b.dc_a,0)+COALESCE(b.dc_b,0) dc, b.dc_b dc_sem_risco,
+           CASE WHEN i.dcv > 0 THEN i.inadv/i.dcv END inad_pct,
+           CASE WHEN s.vtot > 0 THEN s.vsub/s.vtot END subord,
+           CASE WHEN (COALESCE(b.dc_a,0)+COALESCE(b.dc_b,0)) > 0
+                THEN sc.maior_sacado/(COALESCE(b.dc_a,0)+COALESCE(b.dc_b,0)) END pct_maior_sacado,
+           c.pr_max pct_maior_cedente, c.n_ced n_cedentes_declarados,
+           ct.n_cot posicoes_cotistas, b.FUNDO_EXCLUSIVO exclusivo,
+           b.COTST_INTERESSE interesse_unico
+    FROM base b
+    LEFT JOIN ge g ON g.cnpj=b.CNPJ
+    LEFT JOIN inad i ON i.CNPJ=b.CNPJ
+    LEFT JOIN sub s ON s.CNPJ=b.CNPJ
+    LEFT JOIN sac sc ON sc.CNPJ=b.CNPJ
+    LEFT JOIN ced c ON c.CNPJ=b.CNPJ
+    LEFT JOIN cot ct ON ct.CNPJ=b.CNPJ
+    ORDER BY b.VL_PL DESC LIMIT 400""").df()
+    # sinais disparados por veículo (rf2)
+    sinais_v = {}
+    rfs = read("rf2_sinais.csv")
+    if rfs is not None:
+        col_cnpj = "CNPJ" if "CNPJ" in rfs.columns else rfs.columns[0]
+        col_sig = next((c for c in ("sinal_id", "sinal", "id") if c in rfs.columns), None)
+        if col_sig:
+            for cnpj, grp in rfs.groupby(rfs[col_cnpj].astype(str)):
+                sinais_v[cnpj.zfill(14)] = sorted(set(grp[col_sig].astype(str)))[:12]
+    fichas["sinais"] = fichas.CNPJ.astype(str).map(lambda x: sinais_v.get(x, []))
+    TAB["fichas"] = dict(
+        rotulo="Ficha do veículo", fonte="CVM — informe mensal (múltiplas tabelas)",
+        campo="painel canônico do corte",
+        nota="Os 400 maiores veículos por patrimônio. Campos nulos aparecem como '—' e "
+             "significam ausência de reporte, nunca zero.",
+        colunas=list(fichas.columns),
+        linhas=json.loads(fichas.to_json(orient="values")))
+    con.close()
+
     # ---------------- meta ----------------
     man = pd.read_csv(os.path.join(ROOT, "manifesto_fontes.csv"))
     matriz = pd.read_csv(os.path.join(ROOT, "MATRIZ_FONTES_COBERTURA.csv"))

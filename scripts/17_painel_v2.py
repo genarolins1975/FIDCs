@@ -130,9 +130,11 @@ const nf = new Intl.NumberFormat('pt-BR');
 function fmtVal(v, unidade, dec){
   if(v===null||v===undefined) return '—';
   if(unidade==='R$'){
+    if(v===0) return 'R$ 0 (reportado)';
     const bi = v/1e9;
     if(Math.abs(bi)>=1) return 'R$ '+nf.format(+bi.toFixed(dec??1))+' bi';
-    return 'R$ '+nf.format(+(v/1e6).toFixed(1))+' mi';
+    if(Math.abs(v)>=1e6) return 'R$ '+nf.format(+(v/1e6).toFixed(1))+' mi';
+    return 'R$ '+nf.format(+(v/1e3).toFixed(1))+' mil';
   }
   if(unidade==='%') return nf.format(+(v*100).toFixed(dec??1))+'%';
   return nf.format(+v.toFixed(dec??0));
@@ -266,6 +268,7 @@ def main() -> int:
   <button data-tab="t2" role="tab" aria-selected="false">2 · Anatomia</button>
   <button data-tab="t3" role="tab" aria-selected="false">3 · Exposição</button>
   <button data-tab="t4" role="tab" aria-selected="false">4 · Supervisão</button>
+  <button data-tab="tf" role="tab" aria-selected="false">Ficha do veículo</button>
   <button data-tab="t5" role="tab" aria-selected="false">5 · Judicial e regulatório</button>
   <button data-tab="t6" role="tab" aria-selected="false">6 · Auditoria e método</button>
 </nav>
@@ -358,6 +361,19 @@ def main() -> int:
   <div class="card" id="rfscore"></div>
   <h2>Catálogo de sinais</h2>
   <div class="card" id="rfcat"></div>
+</section>
+
+<!-- ================= FICHA ================= -->
+<section id="tf" role="tabpanel" hidden>
+  <h2>Raio-X do veículo</h2>
+  <p class="note">Busque um fundo ou classe por nome ou CNPJ. Os 400 maiores por patrimônio
+  estão disponíveis. Campo vazio significa <strong>ausência de reporte</strong>, nunca zero.</p>
+  <div class="toolbar">
+    <input type="search" id="qf" placeholder="nome do fundo ou CNPJ…" aria-label="Buscar veículo"
+           style="min-width:320px">
+    <select id="fsel" aria-label="Selecionar veículo"></select>
+  </div>
+  <div class="card" id="ficha"></div>
 </section>
 
 <!-- ================= TELA 5 ================= -->
@@ -495,6 +511,55 @@ document.getElementById('rfnota').textContent = D.tabelas.rf_score && D.tabelas.
 
 document.getElementById('tiles5').innerHTML =
   ['rj_vinculos','rj_exposicao','rj_casos','rj_processos'].map(k=>tile(k)).join('');
+// ---- ficha do veículo ----
+(function(){
+  const t = D.tabelas.fichas; if(!t || !t.linhas.length) return;
+  const col = {}; t.colunas.forEach((c,i)=>col[c]=i);
+  const sel = document.getElementById('fsel');
+  function opcoes(q){
+    q=(q||'').trim().toLowerCase();
+    const lista = t.linhas.filter(r=> !q ||
+      String(r[col.DENOM_SOCIAL]).toLowerCase().includes(q) || String(r[col.CNPJ]).includes(q));
+    sel.innerHTML = lista.slice(0,200).map((r,i)=>
+      `<option value="${t.linhas.indexOf(r)}">${r[col.DENOM_SOCIAL]}</option>`).join('');
+    if(lista.length) desenha(t.linhas.indexOf(lista[0]));
+    else document.getElementById('ficha').innerHTML='<p class="note">Nenhum veículo encontrado nesta seleção.</p>';
+  }
+  function linha(rot,val,nota){
+    return `<tr><td style="color:var(--ink2);width:38%">${rot}</td><td>${val}</td>
+      <td class="note" style="border:none;padding-top:7px">${nota||''}</td></tr>`;
+  }
+  function pct(v){ return (v===null||v===undefined)? '—' : nf.format(+(v*100).toFixed(1))+'%'; }
+  function brl(v){ return (v===null||v===undefined)? '—' : fmtVal(v,'R$'); }
+  function desenha(ix){
+    const r = t.linhas[ix]; if(!r) return;
+    const sig = r[col.sinais]||[];
+    document.getElementById('ficha').innerHTML =
+      `<h3 style="font-size:17px;font-family:Georgia,serif;font-weight:400;margin:0 0 3px">${r[col.DENOM_SOCIAL]}</h3>
+       <p class="note mono" style="margin:0 0 14px">CNPJ ${r[col.CNPJ]} · ${r[col.TP_FUNDO_CLASSE]}</p>
+       <table><tbody>
+       ${linha('Patrimônio líquido', brl(r[col.VL_PL]))}
+       ${linha('Administrador fiduciário', r[col.ADMIN]||'—','não assume o risco de crédito da carteira')}
+       ${linha('Gestor', r[col.gestor]||'—','responde pela decisão de investimento')}
+       ${linha('Direitos creditórios', brl(r[col.dc]))}
+       ${linha('— sem transferência de risco', brl(r[col.dc_sem_risco]),'risco econômico permanece no cedente')}
+       ${linha('Inadimplência', pct(r[col.inad_pct]),'parcelas vencidas sobre a carteira (tab V)')}
+       ${linha('Subordinação + mezanino', pct(r[col.subord]),'colchão que absorve a primeira perda')}
+       ${linha('Maior devedor', pct(r[col.pct_maior_sacado]),'tab VIII — sem identificação do devedor')}
+       ${linha('Maior cedente declarado', r[col.pct_maior_cedente]===null?'—':nf.format(r[col.pct_maior_cedente])+'%',
+               (r[col.n_cedentes_declarados]||0)+' cedente(s) declarado(s), até 9 por veículo')}
+       ${linha('Posições de cotistas', r[col.posicoes_cotistas]===null?'—':nf.format(r[col.posicoes_cotistas]),'não mede pessoas únicas')}
+       ${linha('Exclusivo', r[col.exclusivo]==='S'?'sim':(r[col.exclusivo]==='N'?'não':'—'))}
+       ${linha('Cotistas de interesse único', r[col.interesse_unico]==='S'?'sim':(r[col.interesse_unico]==='N'?'não':'—'),
+               'indica estrutura fechada em torno de um mesmo interesse econômico')}
+       ${linha('Sinais de atenção', sig.length? sig.map(x=>`<span class="chip warn">${x}</span>`).join(' ') : '<span class="chip ok">nenhum disparado</span>',
+               'sinal estatístico, não imputação de irregularidade')}
+       </tbody></table>`;
+  }
+  document.getElementById('qf').addEventListener('input', e=>opcoes(e.target.value));
+  sel.addEventListener('change', e=>desenha(+e.target.value));
+  opcoes('');
+})();
 renderTable('rj_vinculos','rjvinc',{bar:'exposicao_estimada'});
 renderTable('rj','rj');
 renderTable('casos','casos');
