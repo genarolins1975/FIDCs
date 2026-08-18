@@ -352,7 +352,8 @@ agente de cobrança — funding de mercado com risco retido no originador.
    originação, não gestão **[FS]**.
 9. **Deterioração**: lista nominal dos 10 piores em inadimplência e 508 saltos
    em `alertas.csv`/`saltos_pl_12m.csv` **[C]**.
-10. **Relevante mas não comprovável publicamente**: identidade dos sacados;
+10. **Relevante mas não comprovável publicamente**: identidade dos sacados
+    (a concentração é mensurável desde a tab VIII, a identidade não);
     valores por cotista; retenção subordinada por grupo econômico; balanços de
     companhias fechadas **[NI]**.
 11. **Transparência que falta**: valores (não só contagem) de cotistas por
@@ -441,6 +442,46 @@ estão na carteira de 550 fundos (CDA), **50% declaradas como emissor ligado**
 "dentro de casa" — e o perfil de cotistas registra 668 pessoas físicas em
 subordinadas sinalizadas. Sinal ≠ irregularidade; a leitura correta é de
 priorização de inspeção.
+
+## 13-B. Achados da reconstrução (revisão de 18/08/2026)
+
+A auditoria forense do painel (`AUDITORIA_PAINEL_FIDC.md`) encontrou que **4 das
+18 tabelas do informe nunca haviam sido processadas**. Incorporadas, produziram
+achados que não existiam na primeira versão **[C]**:
+
+- **Concentração por devedor** (tab VIII): 877 veículos com o maior devedor
+  acima de metade da carteira; R$ 166,3 bi de direitos creditórios em veículos
+  nessa condição. A cobertura da tabela **cai de forma monotônica** — de 99,3%
+  do estoque em jan/2025 para 79,7% em jun/2026 —, o que é, em si, um sinal de
+  deterioração do reporte.
+- **Identidade contábil** (tab III): Ativo − Passivo = PL fecha com **divergência
+  zero nos 4.327 veículos** — o informe é internamente consistente.
+- **Desempenho prometido × entregue** (tab X_6): **372 séries** entregaram
+  desempenho abaixo do que o próprio administrador declarou esperar.
+- **Garantia real** (tab X_7): apenas **28 veículos** declaram colateral sobre os
+  direitos creditórios. A proteção do investidor vem de subordinação e
+  coobrigação, não de garantia sobre ativos.
+- **Preço de aquisição** (tab IX): apenas 26,4% dos veículos operaram no mês, com
+  taxa mediana de desconto de 27,9% — e uma cauda com erros de unidade que passou
+  a ser tratada como sinal de integridade de dados.
+
+**Blackout de reporte em julho/2026** **[C]**: 232 veículos que informaram em
+junho não entregaram o informe de julho, carregando **R$ 73,3 bi (7,3% do
+mercado)** — 8,3 vezes o atrito mensal normal. A ausência é **concentrada por
+administrador**, e 169 dos ausentes (R$ 63,4 bi) estavam com registro "Em
+Funcionamento Normal", isto é, silêncio sem motivo cadastral. Entre os veículos
+que informaram nos dois meses, o mercado **cresceu 2,0%**: a queda aparente da
+competência é artefato de cobertura, não contração.
+
+**Empresas em recuperação judicial ligadas a FIDCs** **[FS]**: 107 vínculos
+identificados por CNPJ, R$ 4,6 bi de estoque atribuído. O DataJud **não retorna
+as partes** dos processos; o estado processual foi lido do marcador obrigatório
+do art. 69 da Lei 11.101/2005 no cadastro do CNPJ. Entre os 40 maiores cedentes
+há **um** caso (Casas Bahia, em recuperação **extra**judicial homologada). Um
+achado específico: **AgroGalaxy aparece cedendo recebíveis em maio e junho de
+2026, já em recuperação judicial** — exatamente a hipótese que a Resolução CVM
+240/2026 passou a acomodar, o que ilustra resposta a incentivo regulatório e não
+deterioração.
 
 ## 14. Limitações e agenda
 

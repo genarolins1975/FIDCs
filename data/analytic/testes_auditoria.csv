@@ -13,7 +13,7 @@ T9 ranking administradores: recálculo independente top-10,dif máx 0.0330%,PASS
 T10 HHI veículos recalculado,0.007448 x 0.007448,PASS,
 T11 circularidade intramercado,16.17% do PL,PASS,cotas de FIDC/FIDC-NP no ativo de outros veículos do universo
 T12 veículos com alienações a cedentes/prestadores (12m),"22 veículos, R$ 2.1 bi",PASS,sinal de operações com partes relacionadas
-T13 arquivos-fonte existentes,34/34,PASS,
+T13 arquivos-fonte existentes,37/37,PASS,
 T13b integridade SHA-256 (amostra 5),5/5 ok,PASS,
 T14 PL CVM x ANBIMA jun/2026,+17.2% vs ANBIMA,WARN,"perímetros distintos: universo CVM inclui FIC-FIDC e veículos fora da cobertura ANBIMA; divergência analisada no relatório, seção Limitações"
 T15 soma das séries de cotas (X_2) x PL (tab IV),dif 0.04%,PASS,difere por veículos sem X_2 e defasagem de marcação
