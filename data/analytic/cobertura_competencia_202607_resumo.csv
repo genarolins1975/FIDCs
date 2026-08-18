@@ -19,7 +19,7 @@ pl_same_store_jun,926173392765.8297,R$,só os que informaram nos 2 meses
 pl_same_store_jul,944817220541.9078,R$,só os que informaram nos 2 meses
 var_pl_same_store,0.020129953982376936,fração,"variação real do mercado, livre do efeito de ausência de reporte"
 mediana_sumidos_mes_a_mes_2024_2026,28.0,veículos,atrito normal em meses já consolidados
-mediana_pct_pl_sumido_mes_a_mes,0.002256441609444084,fração,atrito normal em meses já consolidados
+mediana_pct_pl_sumido_mes_a_mes,0.0022564416094440834,fração,atrito normal em meses já consolidados
 razao_ausencias_jul_sobre_mediana,8.285714285714286,x,quantas vezes o atrito normal
 hhi_pl_ausente_por_administrador,0.5210665223809569,índice,0-1; alto = ausência concentrada em poucos administradores
 share_top1_admin_no_pl_ausente,0.707185863824518,fração,CBSF DISTRIBUIDORA DE TÍTULOS E VALORES MOBILIÁRIOS S.A.

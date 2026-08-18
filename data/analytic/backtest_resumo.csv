@@ -11,14 +11,14 @@ CR023,Liquidação BCB — administrador (CBSF/ex-Reag Trust),S5,positivo,151.0,
 CR023,Liquidação BCB — administrador (CBSF/ex-Reag Trust),S5,controle,453.0,96.0,0.0,0.2119205298013245,1.0,11.0,,,4.5,0.0
 CR023,Liquidação BCB — administrador (CBSF/ex-Reag Trust),S6,positivo,59.0,18.0,92.0,0.3050847457627119,0.39072847682119205,1.0,,,0.6817710134901419,0.9839
 CR023,Liquidação BCB — administrador (CBSF/ex-Reag Trust),S6,controle,219.0,98.0,234.0,0.4474885844748858,0.48344370860927155,9.0,,,0.6817710134901419,0.9839
-CR024,Stop order CVM — Multiplike Plus FIDC,S1,controle,10.0,3.0,20.0,0.3,0.3333333333333333,11.0,,,,
+CR024,Stop order CVM — Multiplike Plus FIDC,S1,controle,12.0,5.0,18.0,0.4166666666666667,0.4,11.0,,,,
 CR024,Stop order CVM — Multiplike Plus FIDC,S2,positivo,2.0,0.0,1.0,0.0,0.6666666666666666,,,,,
 CR024,Stop order CVM — Multiplike Plus FIDC,S2,controle,24.0,0.0,6.0,0.0,0.8,,,,,
 CR024,Stop order CVM — Multiplike Plus FIDC,S3,positivo,3.0,0.0,0.0,0.0,1.0,,,,0.0,1.0
-CR024,Stop order CVM — Multiplike Plus FIDC,S3,controle,30.0,12.0,0.0,0.4,1.0,11.0,,,0.0,1.0
+CR024,Stop order CVM — Multiplike Plus FIDC,S3,controle,30.0,10.0,0.0,0.3333333333333333,1.0,11.0,,,0.0,1.0
 CR024,Stop order CVM — Multiplike Plus FIDC,S4,positivo,3.0,0.0,0.0,0.0,1.0,,,,0.0,1.0
-CR024,Stop order CVM — Multiplike Plus FIDC,S4,controle,30.0,12.0,0.0,0.4,1.0,9.5,,,0.0,1.0
+CR024,Stop order CVM — Multiplike Plus FIDC,S4,controle,30.0,11.0,0.0,0.36666666666666664,1.0,10.0,,,0.0,1.0
 CR024,Stop order CVM — Multiplike Plus FIDC,S5,positivo,3.0,0.0,0.0,0.0,1.0,,,,0.0,1.0
-CR024,Stop order CVM — Multiplike Plus FIDC,S5,controle,30.0,7.0,0.0,0.23333333333333334,1.0,10.0,,,0.0,1.0
-CR024,Stop order CVM — Multiplike Plus FIDC,S6,controle,12.0,6.0,18.0,0.5,0.4,10.0,,,,
+CR024,Stop order CVM — Multiplike Plus FIDC,S5,controle,30.0,5.0,0.0,0.16666666666666666,1.0,11.0,,,0.0,1.0
+CR024,Stop order CVM — Multiplike Plus FIDC,S6,controle,14.0,7.0,16.0,0.5,0.4666666666666667,10.0,,,,
 CR022,Liquidação BCB — Banco Master (parte relacionada),,,,,,,,,0.0,nenhum veículo vinculado na competência anterior,,
