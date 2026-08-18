@@ -108,8 +108,13 @@ identificação de empresas. A identificação nominal vem das fontes 2 e 4.
 - **Janela de resultados:** `from + size` limitado a 10.000. O script contorna
   ambos os limites fatiando a coleta por classe e por trimestre, mantendo cada
   fatia bem abaixo do teto, e deduplicando por `id`.
-- **Cobertura:** o DataJud reflete o que cada tribunal remete ao CNJ; atrasos e
-  lacunas de remessa existem e não são corrigíveis a partir da API.
+- **Cobertura e defasagem de remessa:** o DataJud reflete o que cada tribunal
+  remete ao CNJ. A defasagem é grande e foi medida nesta coleta (executada em
+  18/08/2026): os meses de 2025-10 a 2026-06 trazem entre 138 e 241 processos
+  cada, mas **2026-07 traz apenas 3 e 2026-08 nenhum**; o ajuizamento mais recente
+  é de 07/07/2026. Ou seja, **os dois últimos meses são inutilizáveis para série
+  temporal** — o aparente colapso de ajuizamentos é artefato de remessa, não
+  queda real. Qualquer leitura de tendência deve descartar a cauda recente.
 - **Sigilo:** processos com `nivelSigilo > 0` podem vir com metadados reduzidos.
 
 ---

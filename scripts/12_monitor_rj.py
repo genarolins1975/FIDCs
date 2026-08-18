@@ -232,14 +232,25 @@ def _so_digitos(s) -> str:
 def classifica_papel(natureza: str, no_ranking: bool) -> str:
     """Classifica o papel do FIDC. `natureza` vem do arquivo de casos confirmados."""
     n = (natureza or "").lower()
-    if "sacado" in n or "devedor" in n:
-        return "FIDC com exposição a sacado em RJ"
-    if "coobrig" in n or "recompra" in n:
-        return "empresa com coobrigação"
-    if "cedente" in n or "originador" in n or "cedeu" in n:
-        return "FIDC com exposição a cedente em RJ"
-    if "credor" in n or "habilit" in n:
-        return "FIDC credor"
+    cedente = any(t in n for t in ("cedente", "originador", "cedeu", "cessão", "cessao"))
+    sacado = any(t in n for t in ("sacado", "devedor"))
+    coobrig = any(t in n for t in ("coobrig", "recompra"))
+    credor = any(t in n for t in ("credor", "habilit"))
+
+    # Os papéis não são excludentes: a mesma empresa pode ter cedido recebíveis ao
+    # fundo E figurar como devedora dele. Quando a fonte descreve os dois, o
+    # rótulo registra os dois em vez de escolher arbitrariamente.
+    papeis = []
+    if cedente:
+        papeis.append("FIDC com exposição a cedente em RJ")
+    if sacado:
+        papeis.append("FIDC com exposição a sacado em RJ")
+    if coobrig:
+        papeis.append("empresa com coobrigação")
+    if credor:
+        papeis.append("FIDC credor")
+    if papeis:
+        return " + ".join(dict.fromkeys(papeis))
     return "FIDC com exposição a cedente em RJ" if no_ranking else "relação apenas hipotética"
 
 
@@ -262,9 +273,9 @@ def _universo_cedentes() -> pd.DataFrame:
             cache = json.load(fh)
         nomes = pd.DataFrame.from_dict(cache, orient="index")
         nomes.index.name = "doc_cedente"
-        nomes = nomes.reset_index()[
-            [c for c in ("doc_cedente", "razao_social", "situacao", "uf") if c in nomes.columns]
-        ]
+        nomes = nomes.reset_index()
+        nomes = nomes[[c for c in ("doc_cedente", "razao_social", "situacao", "uf")
+                       if c in nomes.columns]]
         rank = rank.merge(nomes, on="doc_cedente", how="left")
     elif os.path.exists(p_nomes):
         rank = pd.read_csv(p_nomes, dtype={"doc_cedente": str})
@@ -299,7 +310,9 @@ def casa_por_cnpj() -> pd.DataFrame:
         log.warning("universo de cedentes indisponível — sem casamento")
         return pd.DataFrame(columns=COLS_MATCH)
 
-    linhas = []
+    linhas_a: list[dict] = []
+    linhas_b: list[dict] = []
+    linhas = linhas_a
 
     # --- Trilha A: marcador de RJ na própria razão social do cadastro CNPJ ---
     marca = rank["razao_social"].str.upper().str.contains(
@@ -328,6 +341,7 @@ def casa_por_cnpj() -> pd.DataFrame:
         })
 
     # --- Trilha B: CNPJ presente no arquivo de casos confirmados ---
+    linhas = linhas_b
     p_casos = os.path.join(OUT, "rj_casos_confirmados.csv")
     if os.path.exists(p_casos):
         casos = pd.read_csv(p_casos, dtype=str).fillna("")
@@ -372,9 +386,15 @@ def casa_por_cnpj() -> pd.DataFrame:
                 "observacao": c.get("observacao", ""),
             })
 
-    df = pd.DataFrame(linhas, columns=COLS_MATCH)
+    # A trilha B vem primeiro: quando o mesmo CNPJ aparece nas duas, o registro
+    # curado (com data, tribunal, valor e fonte) prevalece sobre o registro
+    # meramente cadastral da trilha A.
+    df = pd.DataFrame(linhas_b + linhas_a, columns=COLS_MATCH)
     if not df.empty:
-        df = df.drop_duplicates(subset=["cnpj_empresa_rj", "razao_social_rj", "evento"])
+        com_cnpj = df[df["cnpj_empresa_rj"] != ""].drop_duplicates(subset=["cnpj_empresa_rj"])
+        sem_cnpj = df[df["cnpj_empresa_rj"] == ""].drop_duplicates(subset=["razao_social_rj"])
+        df = pd.concat([com_cnpj, sem_cnpj], ignore_index=True)
+        df["exposicao_estimada"] = pd.to_numeric(df["exposicao_estimada"], errors="coerce")
         df = df.sort_values("exposicao_estimada", ascending=False, na_position="last")
     return df
 
@@ -384,13 +404,26 @@ def main() -> int:
     os.makedirs(RAW, exist_ok=True)
     os.makedirs(OUT, exist_ok=True)
 
+    # --offline / DATAJUD_OFFLINE=1: reaproveita o JSON bruto já baixado, sem rede.
+    offline = "--offline" in sys.argv or os.environ.get("DATAJUD_OFFLINE") == "1"
+
     todos: list[dict] = []
     ok, falhas = [], []
     ses = requests.Session()
     for trib in TRIBUNAIS:
+        bruto = os.path.join(RAW, f"{trib}_rj_falencia.json")
         try:
+            if offline:
+                if not os.path.exists(bruto):
+                    raise FileNotFoundError(f"modo offline e {bruto} inexistente")
+                with open(bruto, encoding="utf-8") as fh:
+                    docs = json.load(fh)
+                log.info("%s: %d processos lidos do bruto (offline)", trib.upper(), len(docs))
+                todos.extend(docs)
+                ok.append(trib)
+                continue
             docs = consulta_tribunal(trib, ses)
-            with open(os.path.join(RAW, f"{trib}_rj_falencia.json"), "w", encoding="utf-8") as fh:
+            with open(bruto, "w", encoding="utf-8") as fh:
                 json.dump(docs, fh, ensure_ascii=False)
             todos.extend(docs)
             ok.append(trib)

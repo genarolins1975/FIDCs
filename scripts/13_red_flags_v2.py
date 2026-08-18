@@ -1624,8 +1624,9 @@ def gerar_doc(cat: pd.DataFrame, sig: pd.DataFrame, sc: pd.DataFrame,
             A(f"| Origem do limiar | {x.limiar_origem} |")
             A(f"| Severidade | **{x.severidade}** (peso {int(x.peso)}) |")
             A(f"| Materialidade | {x.materialidade} |")
-            A(f"| Persistência mínima | {int(x.persistencia_min_meses)} "
-              f"{'mês' if x.persistencia_min_meses == 1 else 'meses'} consecutivos |")
+            pm = int(x.persistencia_min_meses)
+            A(f"| Persistência mínima | {pm} "
+              f"{'mês (disparo pontual conta)' if pm == 1 else 'meses consecutivos'} |")
             A(f"| Tipo de evidência | {x.tipo_evidencia} |")
             A(f"| Cobertura | {x.cobertura_universo_pct:.2f}% do universo "
               f"({int(x.n_avaliavel)} de {int(x.n_universo)} veículos avaliáveis) |")
@@ -1675,8 +1676,12 @@ def gerar_doc(cat: pd.DataFrame, sig: pd.DataFrame, sc: pd.DataFrame,
     A("**4.8 A materialidade financeira não é perda esperada.** É o montante "
       "**exposto** ao fenômeno que o sinal aponta (estoque inadimplente, valor da "
       "sênior sem colchão, PL do veículo). Não incorpora taxa de recuperação, "
-      "coobrigação nem garantia. Somar materialidades entre sinais dupla-conta o "
-      "mesmo real — por isso a coluna principal é o **máximo**, não a soma.\n")
+      "coobrigação nem garantia. Somar materialidades **entre sinais** dupla-conta "
+      "o mesmo real — por isso a coluna principal é o `máximo`, não a soma. Somar "
+      "**entre veículos** é pior ainda: parte dos sinais mede estoque (carteira, "
+      "PL, inadimplência) e parte mede fluxo anual (aquisições, rolagem), e as "
+      "duas grandezas não se somam. O total de materialidade do mercado inteiro "
+      "não é um número com significado.\n")
     A("**4.9 Sem validação externa.** Nada aqui foi confrontado com processos "
       "sancionadores, atas de assembleia, regulamentos ou demonstrações "
       "financeiras auditadas. Cada ficha traz uma **ação de investigação** "
@@ -1826,8 +1831,15 @@ def main() -> int:
         n_sinais=("sinal_id", "count"),
         veiculos_disparo=("n_veiculos_disparo", "sum"),
         cobertura_media=("cobertura_universo_pct", "mean")).round(1).to_string())
+    print("\n=== disparos por sinal ===")
+    print(cat_out[["sinal_id", "severidade", "cobertura_universo_pct",
+                   "n_veiculos_disparo", "n_veiculos_disparo_persistente"]]
+          .to_string(index=False))
     print("\n=== classificação ===")
     print(sc.classificacao.value_counts().to_string())
+    print(f"não classificáveis: {int((sc.classificacao == 'não classificável').sum())} "
+          f"({(sc.classificacao == 'não classificável').mean():.1%} do universo) — "
+          f"cobertura de dados < 50%")
     print(f"\nuniverso no corte: {sc.CNPJ.nunique()} veículos; "
           f"{int((sc.n_disparos > 0).sum())} com ao menos um disparo")
     print("\n=== top 10 score (score alto != irregularidade) ===")
